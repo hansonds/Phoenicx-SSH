@@ -346,7 +346,7 @@ done
     }
 
     if (cont != null) {
-      containers = cont!;
+      containers = cont;
       dockerSeen = true;
     }
 

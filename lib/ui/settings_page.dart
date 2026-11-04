@@ -100,7 +100,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   onChanged: (v) async {
                     s.keepCpuAwake = v;
                     await _save();
-                    await KeepAlive.refresh();
+                    await SessionKeeper.refresh();
                   },
                   title: const Text('Keep connections alive with screen off'),
                   subtitle: const Text(
@@ -115,7 +115,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     style: TextStyle(color: PX.muted, fontSize: 12),
                   ),
                   trailing: const Icon(Icons.battery_saver_outlined),
-                  onTap: KeepAlive.requestBatteryExemption,
+                  onTap: SessionKeeper.requestBatteryExemption,
                 ),
               ],
               _section('Server monitor'),

@@ -452,7 +452,7 @@ class Sessions extends ChangeNotifier {
 
   int get liveCount => tabs.where((t) => t.isLive).length;
 
-  void _sync() => KeepAlive.update(liveCount);
+  void _sync() => SessionKeeper.update(liveCount);
 
   /// Called when the app comes back to the foreground.
   void checkAll() {

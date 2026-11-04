@@ -8,7 +8,7 @@ import 'store.dart';
 /// the app process, network and CPU alive while SSH sessions are open, so the
 /// connections are not dropped when the screen is off or the app is in the
 /// background. Does nothing on Windows.
-class KeepAlive {
+class SessionKeeper {
   static const _ch = MethodChannel('phoenicx_ssh/keepalive');
   static int _last = -1;
 

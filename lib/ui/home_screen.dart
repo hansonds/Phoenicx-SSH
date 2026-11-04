@@ -27,7 +27,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Wi
     WidgetsBinding.instance.addObserver(this);
     if (Platform.isWindows) windowManager.addListener(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      KeepAlive.requestNotificationPermission();
+      SessionKeeper.requestNotificationPermission();
     });
   }
 
@@ -144,7 +144,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Wi
             if (_sessions.selected >= 0) {
               _sessions.select(-1);
             } else {
-              KeepAlive.moveToBack();
+              SessionKeeper.moveToBack();
             }
           },
           child: Scaffold(

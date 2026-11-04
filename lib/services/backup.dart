@@ -116,7 +116,7 @@ Future<List<HostConfig>> importPuttySessions() async {
       final port = int.tryParse(portHex.replaceFirst('0x', ''), radix: 16) ?? 22;
       final keyPath = (vals['PublicKeyFile'] ?? '').trim();
       final h = HostConfig(
-        name: Uri.decodeComponent(name!),
+        name: Uri.decodeComponent(name),
         host: hostName,
         port: port,
         username: user.isEmpty ? 'ubuntu' : user,
