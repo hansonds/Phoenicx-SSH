@@ -95,6 +95,10 @@ jobs:
           sleep 8
           import -window root shots/3-monitor-later.png
           tail -30 app.log || true
+          for f in shots/*.png; do
+            convert "$f" -resize 75% -quality 70 "${f%.png}.jpg"
+            echo "@@IMG $(basename ${f%.png}) $(base64 -w 0 ${f%.png}.jpg)"
+          done
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -147,6 +151,14 @@ jobs:
           [System.Windows.Forms.SendKeys]::SendWait("echo hello123{ENTER}")
           Start-Sleep 3
           Shot "2-typed"
+          Get-ChildItem shots\*.png | ForEach-Object {
+            $img = [System.Drawing.Image]::FromFile($_.FullName)
+            $w = [int]($img.Width * 0.6); $h = [int]($img.Height * 0.6)
+            $small = New-Object System.Drawing.Bitmap $img, $w, $h
+            $jpg = $_.FullName -replace '\.png$', '.jpg'
+            $small.Save($jpg, [System.Drawing.Imaging.ImageFormat]::Jpeg)
+            Write-Host ("@@IMG " + $_.BaseName + " " + [Convert]::ToBase64String([IO.File]::ReadAllBytes($jpg)))
+          }
           if (Test-Path $log) { $t = Get-Content $log -Raw; Write-Host "Server received: [$t]" } else { $t = "" ; Write-Host "Nothing received" }
           if ($t -notmatch "echo hello123") { Write-Host "::error::Typing did not reach the SSH server"; exit 1 }
           Write-Host "Typing works on Windows"
