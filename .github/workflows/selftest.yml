@@ -1,0 +1,158 @@
+name: Self test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  linux:
+    name: Linux server end-to-end + screenshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install test server tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq openssh-server putty-tools clang cmake ninja-build pkg-config \
+            libgtk-3-dev libsecret-1-dev libjsoncpp-dev xvfb xdotool imagemagick >/dev/null
+          sudo apt-get remove -y -qq nethogs >/dev/null 2>&1 || true
+          pip install -q cryptography
+
+      - name: Create keys in every format
+        run: |
+          mkdir -p keys ~/.ssh && cd keys
+          ssh-keygen -q -t ed25519 -N '' -f id_ed25519
+          ssh-keygen -q -t rsa -b 2048 -m PEM -N '' -f id_rsa_pem
+          ssh-keygen -q -t ecdsa -b 256 -N '' -f id_ecdsa
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out oracle_pkcs8.key 2>/dev/null
+          ssh-keygen -y -f oracle_pkcs8.key > oracle_pkcs8.key.pub
+          cp id_ecdsa ec_pkcs8.key && ssh-keygen -q -p -N '' -m PKCS8 -f ec_pkcs8.key
+          openssl genpkey -algorithm ed25519 -out ed25519_pkcs8.key
+          python3 -c "from cryptography.hazmat.primitives import serialization as s; k=s.load_pem_private_key(open('ed25519_pkcs8.key','rb').read(),None); print(k.public_key().public_bytes(s.Encoding.OpenSSH,s.PublicFormat.OpenSSH).decode())" > ed25519_pkcs8.key.pub
+          puttygen id_rsa_pem -O private -o rsa.ppk
+          puttygen id_rsa_pem -O private --ppk-param version=2 -o rsa_v2.ppk
+          puttygen id_ed25519 -O private -o ed25519.ppk
+          puttygen id_ecdsa -O private -o ecdsa.ppk
+          head -3 oracle_pkcs8.key ec_pkcs8.key ed25519_pkcs8.key rsa.ppk | cut -c1-60
+          cat *.pub >> ~/.ssh/authorized_keys
+          chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys
+
+      - name: Start SSH server (port 2222) and a Docker container
+        run: |
+          echo "$USER:phx123" | sudo chpasswd
+          sudo mkdir -p /run/sshd && sudo ssh-keygen -A
+          sudo /usr/sbin/sshd -p 2222 -o StrictModes=no -o PasswordAuthentication=yes -o KbdInteractiveAuthentication=yes
+          docker run -d --name phx-test nginx:alpine
+          sleep 2
+          ssh -o StrictHostKeyChecking=no -i keys/id_ed25519 -p 2222 $USER@127.0.0.1 'echo ssh-ok; sudo -n true && echo sudo-ok'
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: End-to-end tests
+        env:
+          SSH_PORT: "2222"
+          KEY_DIR: ${{ github.workspace }}/keys
+        run: |
+          export SSH_USER=$USER
+          flutter test test/e2e_test.dart --reporter expanded
+
+      - name: Build Linux app for screenshots
+        if: always()
+        run: |
+          flutter create --org com.hanson --project-name phoenicx_ssh --platforms linux .
+          rm -rf test/widget_test.dart
+          flutter build linux --release
+
+      - name: Run app, type with a real keyboard, take screenshots
+        if: always()
+        run: |
+          mkdir -p shots
+          Xvfb :99 -screen 0 1440x900x24 >/dev/null 2>&1 &
+          export DISPLAY=:99
+          sleep 2
+          PHOENICX_SELFTEST="$USER:phx123@127.0.0.1:2222" PHOENICX_SELFTEST_MONITOR=30 \
+            build/linux/x64/release/bundle/phoenicx_ssh > app.log 2>&1 &
+          sleep 14
+          WID=$(xdotool search --onlyvisible --class phoenicx 2>/dev/null | head -1 || true)
+          echo "window: $WID"
+          [ -n "$WID" ] && xdotool windowsize $WID 1400 860 && xdotool windowactivate --sync $WID || true
+          sleep 2
+          xdotool type --delay 60 'echo typed_with_keyboard && uptime'
+          xdotool key Return
+          sleep 3
+          import -window root shots/1-terminal.png
+          sleep 30
+          import -window root shots/2-monitor.png
+          sleep 8
+          import -window root shots/3-monitor-later.png
+          tail -30 app.log || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-screenshots
+          path: shots/
+
+  windows:
+    name: Windows typing test
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build
+        shell: pwsh
+        run: |
+          flutter create --org com.hanson --project-name phoenicx_ssh --platforms windows .
+          (Get-Content windows/runner/main.cpp) -replace 'L"phoenicx_ssh"', 'L"Phoenicx SSH"' | Set-Content windows/runner/main.cpp
+          flutter pub get
+          flutter build windows --release
+
+      - name: Type into the app with real keystrokes
+        shell: pwsh
+        run: |
+          pip install -q paramiko
+          $log = "$env:RUNNER_TEMP\typed.log"
+          New-Item -ItemType Directory -Force shots | Out-Null
+          Start-Process python -ArgumentList ".github/selftest/fake_ssh_server.py", $log
+          Start-Sleep 4
+          $env:PHOENICX_SELFTEST = "test:test@127.0.0.1:2222"
+          Start-Process "build\windows\x64\runner\Release\phoenicx_ssh.exe"
+          Start-Sleep 18
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing, Microsoft.VisualBasic
+          function Shot($name) {
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $bmp.Save("shots\$name.png")
+          }
+          Shot "1-connected"
+          try { [Microsoft.VisualBasic.Interaction]::AppActivate("Phoenicx SSH") } catch { Write-Host "AppActivate failed: $_" }
+          Start-Sleep 1
+          [System.Windows.Forms.SendKeys]::SendWait("echo hello123{ENTER}")
+          Start-Sleep 3
+          Shot "2-typed"
+          if (Test-Path $log) { $t = Get-Content $log -Raw; Write-Host "Server received: [$t]" } else { $t = "" ; Write-Host "Nothing received" }
+          if ($t -notmatch "echo hello123") { Write-Host "::error::Typing did not reach the SSH server"; exit 1 }
+          Write-Host "Typing works on Windows"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-screenshots
+          path: shots/

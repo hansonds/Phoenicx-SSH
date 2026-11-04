@@ -185,21 +185,6 @@ class _HostsPageState extends State<HostsPage> {
           const Text('Phoenicx SSH', style: TextStyle(fontWeight: FontWeight.w700)),
         ]),
         actions: [
-          PopupMenuButton<String>(
-            tooltip: 'Backup',
-            icon: const Icon(Icons.import_export),
-            onSelected: (v) {
-              if (v == 'import') _import();
-              if (v == 'export') _export();
-              if (v == 'putty') _importPutty();
-            },
-            itemBuilder: (_) => [
-              const PopupMenuItem(value: 'export', child: ListTile(leading: Icon(Icons.upload_file), title: Text('Export backup'), dense: true)),
-              const PopupMenuItem(value: 'import', child: ListTile(leading: Icon(Icons.download), title: Text('Import backup'), dense: true)),
-              if (Platform.isWindows)
-                const PopupMenuItem(value: 'putty', child: ListTile(leading: Icon(Icons.terminal), title: Text('Import from PuTTY'), dense: true)),
-            ],
-          ),
           IconButton(
             tooltip: 'Settings',
             icon: const Icon(Icons.settings_outlined),
@@ -233,6 +218,7 @@ class _HostsPageState extends State<HostsPage> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
                 children: [
+                  _backupBar(hosts.length),
                   if (hosts.length > 5)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10),
@@ -253,6 +239,36 @@ class _HostsPageState extends State<HostsPage> {
       ),
     );
   }
+
+  Widget _backupBar(int count) => Padding(
+        padding: const EdgeInsets.only(bottom: 12, top: 4),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text('$count server${count == 1 ? '' : 's'}',
+                style: const TextStyle(color: PX.muted, fontWeight: FontWeight.w600)),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              onPressed: _export,
+              icon: const Icon(Icons.upload_file, size: 18),
+              label: const Text('Export'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _import,
+              icon: const Icon(Icons.download, size: 18),
+              label: const Text('Import'),
+            ),
+            if (Platform.isWindows)
+              OutlinedButton.icon(
+                onPressed: _importPutty,
+                icon: const Icon(Icons.terminal, size: 18),
+                label: const Text('Import from PuTTY'),
+              ),
+          ],
+        ),
+      );
 
   Widget _empty() => Center(
         child: Padding(

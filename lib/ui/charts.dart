@@ -16,8 +16,16 @@ class LiveChart extends StatelessWidget {
   final double? maxY;
   final int capacity;
   final double height;
+
+  /// Formats the value at the top of the chart (e.g. "100%" or "2.1 MB/s").
+  final String Function(double top)? topLabel;
   const LiveChart(
-      {super.key, required this.series, this.maxY, this.capacity = 90, this.height = 70});
+      {super.key,
+      required this.series,
+      this.maxY,
+      this.capacity = 90,
+      this.height = 70,
+      this.topLabel});
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +33,7 @@ class LiveChart extends StatelessWidget {
       height: height,
       width: double.infinity,
       child: CustomPaint(
-        painter: _ChartPainter(series, maxY, capacity),
+        painter: _ChartPainter(series, maxY, capacity, topLabel),
       ),
     );
   }
@@ -35,7 +43,8 @@ class _ChartPainter extends CustomPainter {
   final List<Series> series;
   final double? maxY;
   final int capacity;
-  _ChartPainter(this.series, this.maxY, this.capacity);
+  final String Function(double top)? topLabel;
+  _ChartPainter(this.series, this.maxY, this.capacity, this.topLabel);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -54,6 +63,13 @@ class _ChartPainter extends CustomPainter {
         }
       }
       top = top <= 0 ? 1 : top * 1.15;
+    }
+    if (topLabel != null) {
+      final tp = TextPainter(
+        text: TextSpan(text: topLabel!(top), style: const TextStyle(fontSize: 9.5, color: PX.muted)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(size.width - tp.width - 2, 1));
     }
     final step = size.width / max(1, capacity - 1);
     for (final s in series) {
@@ -115,6 +131,98 @@ class UsageBar extends StatelessWidget {
             widthFactor: (percent / 100).clamp(0.0, 1.0),
             child: Container(color: color),
           ),
+        ]),
+      ),
+    );
+  }
+}
+
+/// Circular percentage gauge.
+class RingGauge extends StatelessWidget {
+  final double percent;
+  final String label;
+  final String? sub;
+  final Color color;
+  final double size;
+  const RingGauge(
+      {super.key, required this.percent, required this.label, this.sub, required this.color, this.size = 74});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      SizedBox(
+        width: size,
+        height: size,
+        child: CustomPaint(
+          painter: _RingPainter(percent, color),
+          child: Center(
+            child: Text('${percent.toStringAsFixed(0)}%',
+                style: TextStyle(fontSize: size * 0.22, fontWeight: FontWeight.w700)),
+          ),
+        ),
+      ),
+      const SizedBox(height: 6),
+      Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+      if (sub != null)
+        Text(sub!, style: const TextStyle(fontSize: 10.5, color: PX.muted), textAlign: TextAlign.center),
+    ]);
+  }
+}
+
+class _RingPainter extends CustomPainter {
+  final double percent;
+  final Color color;
+  _RingPainter(this.percent, this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = size.width * 0.1;
+    final rect = Rect.fromLTWH(stroke / 2, stroke / 2, size.width - stroke, size.height - stroke);
+    canvas.drawArc(
+        rect,
+        0,
+        2 * pi,
+        false,
+        Paint()
+          ..color = PX.surface2
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = stroke);
+    final c = percent >= 90 ? PX.red : (percent >= 75 ? PX.yellow : color);
+    canvas.drawArc(
+        rect,
+        -pi / 2,
+        2 * pi * (percent / 100).clamp(0.0, 1.0),
+        false,
+        Paint()
+          ..color = c
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RingPainter old) => old.percent != percent || old.color != color;
+}
+
+/// A bar split into coloured parts (e.g. memory used / cache / free).
+class StackedBar extends StatelessWidget {
+  final List<(double, Color)> parts; // fractions 0..1
+  const StackedBar({super.key, required this.parts});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: SizedBox(
+        height: 8,
+        child: Row(children: [
+          for (final p in parts)
+            if (p.$1 > 0) Expanded(flex: max(1, (p.$1 * 1000).round()), child: Container(color: p.$2)),
+          if (parts.fold<double>(0, (a, b) => a + b.$1) < 1)
+            Expanded(
+              flex: max(1, ((1 - parts.fold<double>(0, (a, b) => a + b.$1)) * 1000).round()),
+              child: Container(color: PX.surface2),
+            ),
         ]),
       ),
     );

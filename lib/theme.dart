@@ -72,6 +72,7 @@ class PX {
 
   static const terminal = TerminalTheme(
     cursor: Color(0xFFFF8A4C),
+    selectionCursor: Color(0xFFFF8A4C),
     selection: Color(0x66FF8A4C),
     foreground: Color(0xFFE8E6E3),
     background: Color(0xFF0B0B10),

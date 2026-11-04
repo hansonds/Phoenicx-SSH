@@ -28,6 +28,7 @@ class SshTab extends ChangeNotifier {
   final controller = TerminalController();
   final monitor = MonitorService();
   final nethogs = NetHogsService();
+  final nethogsTool = ServerTool('nethogs');
 
   SSHClient? client;
   SSHSession? _shell;
@@ -38,6 +39,9 @@ class SshTab extends ChangeNotifier {
   int retryIn = 0;
   DateTime? connectedSince;
   bool monitorVisible = false;
+
+  /// Wide screens: monitor fills the whole tab instead of a side panel.
+  bool monitorExpanded = false;
   bool ctrlArmed = false, altArmed = false;
 
   bool _everConnected = false;
@@ -269,6 +273,7 @@ class SshTab extends ChangeNotifier {
     _watchdog = null;
     monitor.detach();
     nethogs.stop();
+    nethogsTool.reset();
     final s = _shell, c = client;
     _shell = null;
     client = null;
@@ -349,9 +354,19 @@ class SshTab extends ChangeNotifier {
     }
   }
 
+  void setMonitorExpanded(bool v) {
+    monitorExpanded = v;
+    if (v) {
+      setMonitorVisible(true);
+    } else {
+      notifyListeners();
+    }
+  }
+
   void setMonitorVisible(bool v) {
     if (monitorVisible == v) return;
     monitorVisible = v;
+    if (!v) monitorExpanded = false;
     notifyListeners();
     final c = client;
     if (c == null || status != TabStatus.connected) return;
@@ -403,6 +418,7 @@ class SshTab extends ChangeNotifier {
     close();
     monitor.dispose();
     nethogs.dispose();
+    nethogsTool.dispose();
     super.dispose();
   }
 }

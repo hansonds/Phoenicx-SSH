@@ -12,8 +12,8 @@ dependencies:
   dartssh2: ^4.1.0
   xterm:
     git:
-      url: https://github.com/TerminalStudio/xterm.dart
-      ref: d35ba2cc72d0b89b0fd19af69d57df2c02f26a16
+      url: https://github.com/lollipopkit/xterm.dart
+      ref: 725a78b986d7c4dea0e4852d61ff19523f69dbbe
   pointycastle: ^4.0.0
   pinenacl: ^0.6.0
   path_provider: ^2.1.4
@@ -21,6 +21,10 @@ dependencies:
   file_picker: ^13.0.0
   url_launcher: ^6.3.0
   window_manager: '>=0.4.3 <0.6.0'
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
 
 flutter:
   uses-material-design: true

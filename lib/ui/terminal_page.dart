@@ -24,13 +24,24 @@ class _TerminalPageState extends State<TerminalPage> {
   bool get _touch => Platform.isAndroid;
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.active) _grabFocus();
+  }
+
+  @override
   void didUpdateWidget(covariant TerminalPage old) {
     super.didUpdateWidget(old);
-    if (widget.active && !old.active) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !_touch) _focus.requestFocus();
-      });
-    }
+    if (widget.active && !old.active) _grabFocus();
+  }
+
+  /// Explicitly request focus (not just autofocus) so the keyboard input
+  /// connection is opened and typing reaches the terminal.
+  void _grabFocus() {
+    if (_touch) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.active) _focus.requestFocus();
+    });
   }
 
   @override
@@ -57,6 +68,7 @@ class _TerminalPageState extends State<TerminalPage> {
     final text = data?.text;
     if (text == null || text.isEmpty) return;
     tab.terminal.paste(text);
+    _grabFocus();
   }
 
   void _fontSize(double delta) {
@@ -75,12 +87,14 @@ class _TerminalPageState extends State<TerminalPage> {
         final showMonitor = tab.monitorVisible;
         final term = _terminalArea();
         Widget body;
-        if (wide) {
+        if (wide && showMonitor && tab.monitorExpanded) {
+          body = MonitorPanel(tab: tab);
+        } else if (wide) {
           body = Row(children: [
             Expanded(child: term),
             if (showMonitor) ...[
               const VerticalDivider(width: 1),
-              SizedBox(width: 390, child: MonitorPanel(tab: tab)),
+              SizedBox(width: 440, child: MonitorPanel(tab: tab)),
             ],
           ]);
         } else {
@@ -90,7 +104,8 @@ class _TerminalPageState extends State<TerminalPage> {
           _toolbar(wide),
           const Divider(height: 1),
           Expanded(child: body),
-          if (_touch && !(showMonitor && !wide)) _ExtraKeys(tab: tab, onPaste: _paste),
+          if (_touch && !(showMonitor && (!wide || tab.monitorExpanded)))
+            _ExtraKeys(tab: tab, onPaste: _paste),
         ]);
       },
     );
@@ -106,7 +121,8 @@ class _TerminalPageState extends State<TerminalPage> {
             tab.terminal,
             controller: tab.controller,
             focusNode: _focus,
-            autofocus: widget.active && !_touch,
+            autofocus: false,
+            enableSuggestions: false,
             theme: PX.terminal,
             textStyle: TerminalStyle(fontSize: settings.fontSize),
             padding: const EdgeInsets.all(6),
@@ -199,11 +215,17 @@ class _TerminalPageState extends State<TerminalPage> {
             style: const TextStyle(fontSize: 12.5, color: PX.muted),
           ),
         ),
-        if (connected && m.hasData) ...[
-          _mini('CPU', m.cpu, PX.accent),
-          _mini('RAM', m.memPerc, PX.blue),
-          if (wide) _netMini(m.rxRate, m.txRate),
-        ],
+        if (connected)
+          AnimatedBuilder(
+            animation: m,
+            builder: (context, _) => !m.hasData
+                ? const SizedBox.shrink()
+                : Row(mainAxisSize: MainAxisSize.min, children: [
+                    _mini('CPU', m.cpu, PX.accent),
+                    _mini('RAM', m.memPerc, PX.blue),
+                    if (wide) _netMini(m.rxRate, m.txRate),
+                  ]),
+          ),
         if (!_touch || wide) ...[
           _iconBtn(Icons.text_decrease, 'Smaller text', () => _fontSize(-1)),
           _iconBtn(Icons.text_increase, 'Bigger text', () => _fontSize(1)),
@@ -216,10 +238,22 @@ class _TerminalPageState extends State<TerminalPage> {
             _focus.requestFocus();
             SystemChannels.textInput.invokeMethod('TextInput.show');
           }),
+        if (wide && tab.monitorVisible)
+          _iconBtn(
+            tab.monitorExpanded ? Icons.close_fullscreen : Icons.open_in_full,
+            tab.monitorExpanded ? 'Back to terminal + monitor' : 'Full-screen monitor',
+            () {
+              tab.setMonitorExpanded(!tab.monitorExpanded);
+              _grabFocus();
+            },
+          ),
         _iconBtn(
           tab.monitorVisible ? Icons.terminal : Icons.monitor_heart_outlined,
           tab.monitorVisible ? (wide ? 'Hide monitor' : 'Show terminal') : 'Server monitor',
-          () => tab.setMonitorVisible(!tab.monitorVisible),
+          () {
+            tab.setMonitorVisible(!tab.monitorVisible);
+            _grabFocus();
+          },
           highlight: tab.monitorVisible && wide,
         ),
       ]),

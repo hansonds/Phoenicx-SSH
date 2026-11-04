@@ -19,10 +19,12 @@ class Store {
   static final Store I = Store._();
 
   final hosts = ValueNotifier<List<HostConfig>>([]);
-  late AppSettings settings;
+  AppSettings settings = AppSettings();
   final settingsVersion = ValueNotifier<int>(0);
 
-  late Directory _dir;
+  Directory? _d;
+  Directory get _dir => _d!;
+  bool get ready => _d != null;
   Uint8List? _key;
 
   File get _hostsFile => File('${_dir.path}${Platform.pathSeparator}hosts.bin');
@@ -32,7 +34,7 @@ class Store {
       File('${_dir.path}${Platform.pathSeparator}.key');
 
   Future<void> init() async {
-    _dir = await getApplicationSupportDirectory();
+    _d = await getApplicationSupportDirectory();
     await _dir.create(recursive: true);
     try {
       settings = AppSettings.fromJson(
@@ -83,6 +85,7 @@ class Store {
   }
 
   Future<void> saveHosts() async {
+    if (!ready) return;
     final data = utf8.encode(jsonEncode(hosts.value.map((h) => h.toJson()).toList()));
     final enc = aesGcmEncrypt(_key!, Uint8List.fromList(data));
     final tmp = File('${_hostsFile.path}.tmp');
@@ -116,6 +119,10 @@ class Store {
   }
 
   Future<void> saveSettings() async {
+    if (!ready) {
+      settingsVersion.value++;
+      return;
+    }
     await _settingsFile.writeAsString(jsonEncode(settings.toJson()));
     settingsVersion.value++;
   }
