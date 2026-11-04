@@ -1,0 +1,154 @@
+name: Build Phoenicx SSH
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version number (e.g. 1.0.0)"
+        required: true
+        default: "1.0.0"
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  APP_VERSION: ${{ github.event.inputs.version || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '0.0.1' }}
+
+jobs:
+  android:
+    name: Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Version
+        run: echo "V=${APP_VERSION#v}" >> $GITHUB_ENV
+
+      - name: Create Android project files
+        run: |
+          flutter create --org com.hanson --project-name phoenicx_ssh --platforms android .
+          rm -rf test
+          cp branding/android/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          cp -r branding/android/res/* android/app/src/main/res/
+          KDIR=android/app/src/main/kotlin/com/hanson/phoenicx_ssh
+          mkdir -p $KDIR
+          rm -f $KDIR/*.kt
+          cp branding/android/kotlin/*.kt $KDIR/
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib
+
+      - name: Build APKs
+        run: |
+          flutter build apk --release --build-name "$V" --build-number "${{ github.run_number }}" --dart-define=APP_VERSION="$V"
+          mkdir -p out
+          cp build/app/outputs/flutter-apk/app-release.apk "out/PhoenicxSSH-$V-universal.apk"
+          flutter build apk --release --split-per-abi --build-name "$V" --build-number "${{ github.run_number }}" --dart-define=APP_VERSION="$V"
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "out/PhoenicxSSH-$V-arm64.apk"
+
+      - name: Sign with your own key (if secrets are set)
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -z "$KS_B64" ]; then
+            echo "No keystore secret set - APKs keep the default build signature."
+            exit 0
+          fi
+          echo "$KS_B64" | base64 -d > ks.jks
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          for f in out/*.apk; do
+            "$BT/apksigner" sign --ks ks.jks --ks-key-alias "${KS_ALIAS:-phoenicx}" \
+              --ks-pass env:KS_PASS --key-pass env:KS_PASS "$f"
+          done
+          rm -f ks.jks out/*.idsig
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: out/*.apk
+
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Version
+        shell: bash
+        run: echo "V=${APP_VERSION#v}" >> $GITHUB_ENV
+
+      - name: Create Windows project files
+        shell: pwsh
+        run: |
+          flutter create --org com.hanson --project-name phoenicx_ssh --platforms windows .
+          Remove-Item -Recurse -Force test -ErrorAction SilentlyContinue
+          Copy-Item branding/windows/app_icon.ico windows/runner/resources/app_icon.ico -Force
+          (Get-Content windows/runner/main.cpp) -replace 'L"phoenicx_ssh"', 'L"Phoenicx SSH"' | Set-Content windows/runner/main.cpp
+          (Get-Content windows/CMakeLists.txt) -replace 'set\(BINARY_NAME "phoenicx_ssh"\)', 'set(BINARY_NAME "PhoenicxSSH")' | Set-Content windows/CMakeLists.txt
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: Build
+        shell: bash
+        run: flutter build windows --release --build-name "$V" --build-number "${{ github.run_number }}" --dart-define=APP_VERSION="$V"
+
+      - name: Zip portable app
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath "out/PhoenicxSSH-$env:V-Windows-x64-portable.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: out/*.zip
+
+  release:
+    name: Publish release
+    needs: [android, windows]
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Version
+        run: echo "V=${APP_VERSION#v}" >> $GITHUB_ENV
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.V }}
+          name: Phoenicx SSH v${{ env.V }}
+          files: dist/*
+          body: |
+            **Which file do I need?**
+            - Samsung / modern Android phone: `PhoenicxSSH-${{ env.V }}-arm64.apk`
+            - Not sure: `PhoenicxSSH-${{ env.V }}-universal.apk` (bigger, works on every Android device)
+            - Windows: unzip `PhoenicxSSH-${{ env.V }}-Windows-x64-portable.zip` and run `PhoenicxSSH.exe`

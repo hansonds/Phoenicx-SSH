@@ -1,0 +1,15 @@
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.jks
+*.keystore
+local.properties
+/android/
+/windows/
+/linux/
+/macos/
+/ios/
+/web/
+pubspec.lock
