@@ -10,12 +10,19 @@ echo "screen $W x $H"
 adb shell am start -n com.hanson.phoenicx_ssh/.MainActivity
 sleep 30
 shot a1-connected
-# Focus the terminal and type with the soft keyboard path.
-adb shell input tap $((W/2)) $((H*45/100))
-sleep 3
-adb shell input text 'touch%s/tmp/android_typed_ok%s&&%secho%sTYPED_OK'
-adb shell input keyevent 66
-sleep 3
+# Focus the terminal and type with the soft keyboard path (retry if a
+# system dialog such as "launcher isn't responding" steals the tap).
+for try in 1 2 3; do
+  adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null
+  adb shell am start -n com.hanson.phoenicx_ssh/.MainActivity >/dev/null
+  sleep 2
+  adb shell input tap $((W/2)) $((H*45/100))
+  sleep 3
+  adb shell input text 'touch%s/tmp/android_typed_ok'
+  adb shell input keyevent 66
+  sleep 3
+  [ -f /tmp/android_typed_ok ] && break
+done
 shot a2-typed
 adb shell input keyevent 4   # hide keyboard
 sleep 2
