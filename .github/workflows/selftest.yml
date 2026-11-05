@@ -198,7 +198,7 @@ jobs:
           if ($lat.Count -gt 0) { Write-Host ("Average key-to-server time: {0:N1} ms" -f (($lat | Measure-Object -Average).Average)) }
           if ($bad -gt 0) { Write-Host "::error::$bad keys sent wrong bytes" }
           Write-Host "----- app key log (Ctrl lines) -----"
-          if (Test-Path $env:PHOENICX_KEYLOG) { Get-Content $env:PHOENICX_KEYLOG | Select-String -Pattern 'control|Key X|Key O|onOutput \[(24|15|4)\]' | Select-Object -First 40 | ForEach-Object { Write-Host $_.Line } }
+          if (Test-Path $env:PHOENICX_KEYLOG) { $kl = Get-Content $env:PHOENICX_KEYLOG; Write-Host "lines: $($kl.Count)"; $kl | Select-Object -First 70 | ForEach-Object { Write-Host "KL $_" } } else { Write-Host "no key log file" }
           Shot "2b-keys"
 
           Add-Type @"
