@@ -90,6 +90,11 @@ jobs:
           xdotool key Return
           sleep 3
           import -window root shots/1-terminal.png
+          # Drag-select some lines with the mouse, like a user would.
+          xdotool mousemove --window $WID 40 140 mousedown 1 sleep 0.2 mousemove --window $WID 300 200 sleep 0.2 mousemove --window $WID 600 260 sleep 0.2 mouseup 1
+          sleep 1.5
+          import -window root shots/1b-selected.png
+          xdotool mousemove --window $WID 600 600 click 1
           sleep 30
           import -window root shots/2-monitor.png
           sleep 8
@@ -151,6 +156,22 @@ jobs:
           [System.Windows.Forms.SendKeys]::SendWait("echo hello123{ENTER}")
           Start-Sleep 3
           Shot "2-typed"
+          Add-Type @"
+          using System; using System.Runtime.InteropServices;
+          public class Mouse {
+            [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+            [DllImport("user32.dll")] public static extern void mouse_event(int f, int x, int y, int d, int e);
+          }
+          "@
+          Set-Clipboard -Value "nothing"
+          [Mouse]::SetCursorPos(12, 100); Start-Sleep -Milliseconds 200
+          [Mouse]::mouse_event(2, 0, 0, 0, 0)
+          for ($i = 1; $i -le 20; $i++) { [Mouse]::SetCursorPos(12 + $i * 15, 100 + $i * 3); Start-Sleep -Milliseconds 30 }
+          [Mouse]::mouse_event(4, 0, 0, 0, 0)
+          Start-Sleep 2
+          Shot "3-selected"
+          $clip = Get-Clipboard -Raw
+          Write-Host "Clipboard after selecting: [$clip]"
           Get-ChildItem shots\*.png | ForEach-Object {
             $img = [System.Drawing.Image]::FromFile($_.FullName)
             $w = [int]($img.Width * 0.6); $h = [int]($img.Height * 0.6)

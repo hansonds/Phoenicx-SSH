@@ -79,7 +79,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     s.rightClickPaste = v;
                     _save();
                   },
-                  title: const Text('Right-click copies / pastes (like PuTTY)'),
+                  title: const Text('Select to copy, right-click to paste (like PuTTY)'),
                 ),
               _section('Connection'),
               SwitchListTile(

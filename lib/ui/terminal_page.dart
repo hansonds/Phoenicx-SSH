@@ -50,6 +50,35 @@ class _TerminalPageState extends State<TerminalPage> {
     super.dispose();
   }
 
+  /// Windows: like PuTTY, finishing a mouse selection copies it right away
+  /// (no pop-up menu). The highlight stays until you click elsewhere.
+  String? _lastAutoCopied;
+  void _onPointerUp(PointerUpEvent e) {
+    if (_touch) return;
+    Future.delayed(const Duration(milliseconds: 60), () async {
+      if (!mounted) return;
+      final sel = tab.controller.selection;
+      if (sel == null || sel.isCollapsed) {
+        _lastAutoCopied = null;
+        return;
+      }
+      final text = tab.terminal.buffer.getText(sel).trimRight();
+      if (text.isEmpty || text == _lastAutoCopied) return;
+      _lastAutoCopied = text;
+      await Clipboard.setData(ClipboardData(text: text));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(
+            content: Text('Copied - right-click to paste'),
+            duration: Duration(milliseconds: 900),
+            behavior: SnackBarBehavior.floating,
+            width: 260,
+          ));
+      }
+    });
+  }
+
   Future<void> _copy() async {
     final sel = tab.controller.selection;
     if (sel == null) return;
@@ -117,12 +146,16 @@ class _TerminalPageState extends State<TerminalPage> {
       Positioned.fill(
         child: Container(
           color: PX.terminal.background,
-          child: TerminalView(
+          child: Listener(
+           onPointerUp: _onPointerUp,
+           child: TerminalView(
             tab.terminal,
             controller: tab.controller,
             focusNode: _focus,
             autofocus: false,
             enableSuggestions: false,
+            // The copy/paste pop-up is for touch screens only.
+            showToolbar: _touch,
             theme: PX.terminal,
             textStyle: TerminalStyle(fontSize: settings.fontSize),
             padding: const EdgeInsets.all(6),
@@ -137,14 +170,11 @@ class _TerminalPageState extends State<TerminalPage> {
                   PasteTextIntent(SelectionChangedCause.keyboard),
             },
             onSecondaryTapDown: (details, offset) async {
-              // PuTTY style: right-click copies the selection, or pastes.
+              // PuTTY style: selecting copies, right-click pastes.
               if (!settings.rightClickPaste) return;
-              if (tab.controller.selection != null) {
-                await _copy();
-              } else {
-                await _paste();
-              }
+              await _paste();
             },
+           ),
           ),
         ),
       ),
