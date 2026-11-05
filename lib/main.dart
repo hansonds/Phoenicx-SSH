@@ -38,7 +38,10 @@ Future<void> main() async {
   SshTab.hostKeyPrompt = _hostKeyPrompt;
   if (DebugLog.on) {
     HardwareKeyboard.instance.addHandler((e) {
-      DebugLog.log('hw ${e.runtimeType} ${e.logicalKey.debugName} char=${e.character?.codeUnits} '
+      DebugLog.log('hw ${e.runtimeType} logical=0x${e.logicalKey.keyId.toRadixString(16)} '
+          'phys=0x${e.physicalKey.usbHidUsage.toRadixString(16)} synth=${e.synthesized} '
+          'pressed=${HardwareKeyboard.instance.logicalKeysPressed.map((k) => k.keyId.toRadixString(16)).join(',')} '
+          'char=${e.character?.codeUnits} '
           'focus=${FocusManager.instance.primaryFocus?.debugLabel ?? FocusManager.instance.primaryFocus.runtimeType}');
       return false;
     });
