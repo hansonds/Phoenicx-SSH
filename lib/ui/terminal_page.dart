@@ -79,6 +79,27 @@ class _TerminalPageState extends State<TerminalPage> {
     });
   }
 
+  /// Desktop shortcuts like Windows Terminal: Ctrl+C copies when text is
+  /// selected (otherwise it is sent as normal Ctrl+C), Ctrl+V pastes.
+  KeyEventResult _onKeyEvent(FocusNode node, KeyEvent e) {
+    if (_touch || e is! KeyDownEvent) return KeyEventResult.ignored;
+    final hw = HardwareKeyboard.instance;
+    if (!hw.isControlPressed || hw.isShiftPressed || hw.isAltPressed) {
+      return KeyEventResult.ignored;
+    }
+    if (e.logicalKey == LogicalKeyboardKey.keyC) {
+      final sel = tab.controller.selection;
+      if (sel != null && !sel.isCollapsed) {
+        _copy();
+        return KeyEventResult.handled;
+      }
+    } else if (e.logicalKey == LogicalKeyboardKey.keyV && Store.I.settings.ctrlVPaste) {
+      _paste();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
   Future<void> _copy() async {
     final sel = tab.controller.selection;
     if (sel == null) return;
@@ -169,6 +190,7 @@ class _TerminalPageState extends State<TerminalPage> {
               SingleActivator(LogicalKeyboardKey.insert, shift: true):
                   PasteTextIntent(SelectionChangedCause.keyboard),
             },
+            onKeyEvent: _onKeyEvent,
             onSecondaryTapDown: (details, offset) async {
               // PuTTY style: selecting copies, right-click pastes.
               if (!settings.rightClickPaste) return;

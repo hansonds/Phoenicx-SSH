@@ -81,6 +81,20 @@ class _SettingsPageState extends State<SettingsPage> {
                   },
                   title: const Text('Select to copy, right-click to paste (like PuTTY)'),
                 ),
+              if (Platform.isWindows)
+                SwitchListTile(
+                  value: s.ctrlVPaste,
+                  onChanged: (v) {
+                    s.ctrlVPaste = v;
+                    _save();
+                  },
+                  title: const Text('Ctrl+V pastes'),
+                  subtitle: const Text(
+                    'Turn off to send Ctrl+V to the server instead (e.g. page down in nano). '
+                    'Ctrl+Shift+V always pastes.',
+                    style: TextStyle(color: PX.muted, fontSize: 12),
+                  ),
+                ),
               _section('Connection'),
               SwitchListTile(
                 value: s.autoReconnect,

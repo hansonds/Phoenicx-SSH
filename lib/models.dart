@@ -94,6 +94,7 @@ class AppSettings {
   bool autoReconnect;
   bool keepCpuAwake;
   bool rightClickPaste;
+  bool ctrlVPaste;
 
   /// host:port -> "SHA256:..." fingerprint accepted by the user.
   Map<String, String> knownHosts;
@@ -106,6 +107,7 @@ class AppSettings {
     this.autoReconnect = true,
     this.keepCpuAwake = true,
     this.rightClickPaste = true,
+    this.ctrlVPaste = true,
     Map<String, String>? knownHosts,
   }) : knownHosts = knownHosts ?? {};
 
@@ -117,6 +119,7 @@ class AppSettings {
         'autoReconnect': autoReconnect,
         'keepCpuAwake': keepCpuAwake,
         'rightClickPaste': rightClickPaste,
+        'ctrlVPaste': ctrlVPaste,
         'knownHosts': knownHosts,
       };
 
@@ -128,6 +131,7 @@ class AppSettings {
         autoReconnect: (j['autoReconnect'] as bool?) ?? true,
         keepCpuAwake: (j['keepCpuAwake'] as bool?) ?? true,
         rightClickPaste: (j['rightClickPaste'] as bool?) ?? true,
+        ctrlVPaste: (j['ctrlVPaste'] as bool?) ?? true,
         knownHosts: ((j['knownHosts'] as Map?) ?? {})
             .map((k, v) => MapEntry(k.toString(), v.toString())),
       );

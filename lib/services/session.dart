@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:xterm/xterm.dart';
 
 import '../models.dart';
+import 'fast_socket.dart';
 import 'keepalive.dart';
 import 'keys.dart';
 import 'monitor.dart';
@@ -97,7 +98,7 @@ class SshTab extends ChangeNotifier {
       terminal.write('\x1b[38;5;208mConnecting to ${host.address} ...\x1b[0m\r\n');
     }
     try {
-      final socket = await SSHSocket.connect(host.host.trim(), host.port,
+      final socket = await FastSocket.connect(host.host.trim(), host.port,
           timeout: const Duration(seconds: 15));
       if (gen != _gen) {
         socket.destroy();

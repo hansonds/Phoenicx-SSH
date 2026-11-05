@@ -65,6 +65,8 @@ def shell(chan):
             break
         with open(LOG, "ab") as f:
             f.write(data)
+        with open(LOG + ".t", "a") as f:
+            f.write("%.4f %s\n" % (time.time(), data.hex()))
         out = data.replace(b"\r", b"\r\n")
         if b"\r" in data:
             out += b"phx$ "

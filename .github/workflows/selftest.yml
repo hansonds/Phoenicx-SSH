@@ -65,6 +65,17 @@ jobs:
           export SSH_USER=$USER
           flutter test test/e2e_test.dart --reporter expanded
 
+      - name: Speed benchmark (simulated 40 ms network round trip)
+        if: always()
+        env:
+          SSH_PORT: "2222"
+          KEY_DIR: ${{ github.workspace }}/keys
+        run: |
+          export SSH_USER=$USER
+          sudo tc qdisc add dev lo root netem delay 20ms
+          flutter test test/bench_test.dart --reporter expanded || true
+          sudo tc qdisc del dev lo root || true
+
       - name: Build Linux app for screenshots
         if: always()
         run: |
@@ -156,6 +167,37 @@ jobs:
           [System.Windows.Forms.SendKeys]::SendWait("echo hello123{ENTER}")
           Start-Sleep 3
           Shot "2-typed"
+          # ---- Every special key, checked byte by byte, with timing
+          $keys = @(
+            @('Ctrl+X','^x','18'), @('Ctrl+O','^o','0f'), @('Ctrl+D','^d','04'), @('Ctrl+C','^c','03'),
+            @('Ctrl+A','^a','01'), @('Ctrl+E','^e','05'), @('Ctrl+Z','^z','1a'), @('Ctrl+W','^w','17'),
+            @('Ctrl+R','^r','12'), @('Ctrl+L','^l','0c'), @('Ctrl+U','^u','15'), @('Ctrl+K','^k','0b'),
+            @('Ctrl+G','^g','07'), @('Ctrl+B','^b','02'), @('Ctrl+Bksl','^\','1c'),
+            @('Up','{UP}','1b5b41'), @('Down','{DOWN}','1b5b42'), @('Left','{LEFT}','1b5b44'), @('Right','{RIGHT}','1b5b43'),
+            @('Tab','{TAB}','09'), @('Esc','{ESC}','1b'), @('Backspace','{BACKSPACE}','7f'), @('Enter','{ENTER}','0d'),
+            @('Home','{HOME}','1b5b48'), @('End','{END}','1b5b46'), @('Delete','{DELETE}','1b5b337e'),
+            @('PageUp','{PGUP}','1b5b357e'), @('PageDown','{PGDN}','1b5b367e'), @('F1','{F1}','1b4f50'), @('F10','{F10}','1b5b32317e'),
+            @('Alt+B','%b','1b62'), @('a','a','61'), @('Shift+A','+a','41'), @('Pipe','|','7c')
+          )
+          $tlog = "$log.t"
+          $bad = 0
+          $lat = @()
+          foreach ($k in $keys) {
+            $before = if (Test-Path $tlog) { (Get-Content $tlog).Count } else { 0 }
+            $t0 = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000.0
+            [System.Windows.Forms.SendKeys]::SendWait($k[1])
+            Start-Sleep -Milliseconds 350
+            $new = @(Get-Content $tlog | Select-Object -Skip $before)
+            $hex = ($new | ForEach-Object { ($_ -split ' ')[1] }) -join ''
+            $ms = if ($new.Count -gt 0) { [math]::Round((([double](($new[0] -split ' ')[0])) - $t0) * 1000) } else { -1 }
+            $ok = $hex -eq $k[2]
+            if (-not $ok) { $bad++ } else { $lat += $ms }
+            Write-Host ("{0,-10} expected {1,-12} got {2,-14} {3,5} ms  {4}" -f $k[0], $k[2], $hex, $ms, $(if ($ok) {'OK'} else {'WRONG'}))
+          }
+          if ($lat.Count -gt 0) { Write-Host ("Average key-to-server time: {0:N1} ms" -f (($lat | Measure-Object -Average).Average)) }
+          if ($bad -gt 0) { Write-Host "::error::$bad keys sent wrong bytes" }
+          Shot "2b-keys"
+
           Add-Type @"
           using System; using System.Runtime.InteropServices;
           public class Mouse {
@@ -183,6 +225,7 @@ jobs:
           if (Test-Path $log) { $t = Get-Content $log -Raw; Write-Host "Server received: [$t]" } else { $t = "" ; Write-Host "Nothing received" }
           if ($t -notmatch "echo hello123") { Write-Host "::error::Typing did not reach the SSH server"; exit 1 }
           Write-Host "Typing works on Windows"
+          if ($bad -gt 0) { exit 1 }
 
       - uses: actions/upload-artifact@v4
         if: always()
