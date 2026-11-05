@@ -65,6 +65,12 @@ void main() {
     }
   }, skip: skip);
 
+  test('pasted Windows line endings become single Enters', () {
+    expect(SshTab.normalizeNewlines('ls\r\npwd\r\n'), 'ls\rpwd\r');
+    expect(SshTab.normalizeNewlines('a\nb'), 'a\rb');
+    expect(SshTab.normalizeNewlines('\x1b[200~x\r\ny\x1b[201~'), '\x1b[200~x\ry\x1b[201~');
+  });
+
   test('backup round trip with password', () async {
     final h = keyHost('id_ed25519')..password = 'secret';
     final bytes = await buildBackup([h], password: 'pw123');
@@ -91,6 +97,20 @@ void main() {
       tab.terminal.textInput('echo PHX_\$((40+2))');
       tab.terminal.keyInput(TerminalKey.enter);
       await waitFor(() => screen(tab).contains('PHX_42'), 'echo output');
+    });
+
+    test('multi-line paste runs each command once, no blank lines', () async {
+      tab.terminal.paste('echo P_\$((5+5))\r\necho Q_\$((6+6))\r\n');
+      await waitFor(() => screen(tab).contains('Q_12'), 'pasted commands ran');
+      await Future.delayed(const Duration(milliseconds: 800));
+      final lines = screen(tab).split('\n').map((l) => l.trimRight()).toList();
+      final start = lines.indexWhere((l) => l.contains('echo P_'));
+      expect(start, greaterThanOrEqualTo(0));
+      // ignore: avoid_print
+      print('after paste:\n${lines.sublist(start).where((l) => l.isNotEmpty).join('\n')}');
+      // Only the final, current prompt may be empty - no blank prompts in between.
+      final bare = lines.sublist(start).where((l) => l.endsWith('\$') && l.contains('@')).length;
+      expect(bare, 1);
     });
 
     test('ctrl+c from the touch keys', () async {

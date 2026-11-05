@@ -308,7 +308,7 @@ class SshTab extends ChangeNotifier {
     }
     final s = _shell;
     if (status != TabStatus.connected || s == null) return;
-    var out = data;
+    var out = data.length > 1 ? normalizeNewlines(data) : data;
     if (ctrlArmed && data.length == 1) {
       final c = data.toLowerCase().codeUnitAt(0);
       if (c >= 97 && c <= 122) {
@@ -332,6 +332,11 @@ class SshTab extends ChangeNotifier {
   }
 
   void refresh() => notifyListeners();
+
+  /// Pasted text from Windows uses CRLF line endings; a terminal Enter is a
+  /// single CR. Sending both gives an extra empty line after every command.
+  static String normalizeNewlines(String s) =>
+      s.replaceAll('\r\n', '\r').replaceAll('\n', '\r');
 
   /// Type text into the remote shell (used by buttons like "install nethogs").
   void send(String text) => _onInput(text);
