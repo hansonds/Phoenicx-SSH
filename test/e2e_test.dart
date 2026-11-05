@@ -101,6 +101,9 @@ void main() {
 
     test('multi-line paste runs each command once, no blank lines', () async {
       tab.terminal.paste('echo P_\$((5+5))\r\necho Q_\$((6+6))\r\n');
+      // bash holds a multi-line paste until Enter (safety feature, same as PuTTY).
+      await Future.delayed(const Duration(milliseconds: 300));
+      tab.terminal.keyInput(TerminalKey.enter);
       await waitFor(() => screen(tab).contains('Q_12'), 'pasted commands ran');
       await Future.delayed(const Duration(milliseconds: 800));
       final lines = screen(tab).split('\n').map((l) => l.trimRight()).toList();
