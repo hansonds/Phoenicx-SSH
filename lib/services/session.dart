@@ -9,11 +9,32 @@ import 'package:flutter/foundation.dart';
 import 'package:xterm/xterm.dart';
 
 import '../models.dart';
+import 'debug_log.dart';
 import 'fast_socket.dart';
 import 'keepalive.dart';
 import 'keys.dart';
 import 'monitor.dart';
 import 'store.dart';
+
+/// Ciphers ordered by speed in Dart (measured in CI: chacha20 ~12 MB/s,
+/// aes-ctr ~10 MB/s, aes-gcm only ~0.8 MB/s). The SSH library's default puts
+/// AES-GCM first, which made big output (htop, logs, nano) slow.
+const fastAlgorithms = SSHAlgorithms(
+  cipher: [
+    SSHCipherType.chacha20poly1305,
+    SSHCipherType.aes128ctr,
+    SSHCipherType.aes256ctr,
+    SSHCipherType.aes128gcm,
+    SSHCipherType.aes256gcm,
+  ],
+  mac: [
+    SSHMacType.hmacSha256Etm,
+    SSHMacType.hmacSha256,
+    SSHMacType.hmacSha1,
+    SSHMacType.hmacSha512Etm,
+    SSHMacType.hmacSha512,
+  ],
+);
 
 enum TabStatus { connecting, connected, reconnecting, ended, failed }
 
@@ -119,6 +140,7 @@ class SshTab extends ChangeNotifier {
         onVerifyHostKey: _verifyHostKey,
         onUserauthBanner: (b) => terminal.write(b.replaceAll('\n', '\r\n')),
         keepAliveInterval: null, // our own watchdog below also detects dead links
+        algorithms: fastAlgorithms,
       );
       client = c;
       await c.authenticated.timeout(const Duration(seconds: 30));
@@ -303,6 +325,7 @@ class SshTab extends ChangeNotifier {
   // ------------------------------------------------------------- input
 
   void _onInput(String data) {
+    if (DebugLog.on) DebugLog.log('onOutput ${data.codeUnits}');
     if (status == TabStatus.ended || status == TabStatus.failed) {
       if (data.contains('\r')) reconnectNow();
       return;

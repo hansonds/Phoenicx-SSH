@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'models.dart';
+import 'services/debug_log.dart';
 import 'services/session.dart';
 import 'services/store.dart';
 import 'theme.dart';
@@ -34,6 +35,13 @@ Future<void> main() async {
   }
 
   SshTab.hostKeyPrompt = _hostKeyPrompt;
+  if (DebugLog.on) {
+    HardwareKeyboard.instance.addHandler((e) {
+      DebugLog.log('hw ${e.runtimeType} ${e.logicalKey.debugName} char=${e.character?.codeUnits} '
+          'focus=${FocusManager.instance.primaryFocus?.debugLabel ?? FocusManager.instance.primaryFocus.runtimeType}');
+      return false;
+    });
+  }
   runApp(const PhoenicxSshApp());
   _selfTest();
 }

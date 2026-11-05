@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:xterm/xterm.dart';
 
+import '../services/debug_log.dart';
 import '../services/session.dart';
 import '../services/store.dart';
 import '../theme.dart';
@@ -82,6 +83,12 @@ class _TerminalPageState extends State<TerminalPage> {
   /// Desktop shortcuts like Windows Terminal: Ctrl+C copies when text is
   /// selected (otherwise it is sent as normal Ctrl+C), Ctrl+V pastes.
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent e) {
+    if (DebugLog.on) {
+      final k = HardwareKeyboard.instance;
+      DebugLog.log('key ${e.runtimeType} ${e.logicalKey.debugName} phys=${e.physicalKey.debugName} '
+          'ctrl=${k.isControlPressed} shift=${k.isShiftPressed} alt=${k.isAltPressed} '
+          'char=${e.character?.codeUnits}');
+    }
     if (_touch || e is! KeyDownEvent) return KeyEventResult.ignored;
     final hw = HardwareKeyboard.instance;
     if (!hw.isControlPressed || hw.isShiftPressed || hw.isAltPressed) {

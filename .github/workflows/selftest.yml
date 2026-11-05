@@ -151,6 +151,7 @@ jobs:
           Start-Process python -ArgumentList ".github/selftest/fake_ssh_server.py", $log
           Start-Sleep 4
           $env:PHOENICX_SELFTEST = "test:test@127.0.0.1:2222"
+          $env:PHOENICX_KEYLOG = "$env:RUNNER_TEMP\keylog.txt"
           Start-Process "build\windows\x64\runner\Release\phoenicx_ssh.exe"
           Start-Sleep 18
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing, Microsoft.VisualBasic
@@ -196,6 +197,8 @@ jobs:
           }
           if ($lat.Count -gt 0) { Write-Host ("Average key-to-server time: {0:N1} ms" -f (($lat | Measure-Object -Average).Average)) }
           if ($bad -gt 0) { Write-Host "::error::$bad keys sent wrong bytes" }
+          Write-Host "----- app key log (Ctrl lines) -----"
+          if (Test-Path $env:PHOENICX_KEYLOG) { Get-Content $env:PHOENICX_KEYLOG | Select-String -Pattern 'control|Key X|Key O|onOutput \[(24|15|4)\]' | Select-Object -First 40 | ForEach-Object { Write-Host $_.Line } }
           Shot "2b-keys"
 
           Add-Type @"
