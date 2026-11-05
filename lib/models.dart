@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 
 enum AuthType { password, key }
@@ -88,6 +89,9 @@ class HostConfig {
 
 class AppSettings {
   double fontSize;
+
+  /// Phones get their own, smaller default so more fits on screen.
+  double fontSizeMobile;
   int scrollback;
   int monitorSeconds;
   bool backgroundMonitor;
@@ -101,6 +105,7 @@ class AppSettings {
 
   AppSettings({
     this.fontSize = 14,
+    this.fontSizeMobile = 10.5,
     this.scrollback = 5000,
     this.monitorSeconds = 3,
     this.backgroundMonitor = true,
@@ -111,8 +116,18 @@ class AppSettings {
     Map<String, String>? knownHosts,
   }) : knownHosts = knownHosts ?? {};
 
+  double get terminalFontSize => Platform.isAndroid ? fontSizeMobile : fontSize;
+  set terminalFontSize(double v) {
+    if (Platform.isAndroid) {
+      fontSizeMobile = v;
+    } else {
+      fontSize = v;
+    }
+  }
+
   Map<String, dynamic> toJson() => {
         'fontSize': fontSize,
+        'fontSizeMobile': fontSizeMobile,
         'scrollback': scrollback,
         'monitorSeconds': monitorSeconds,
         'backgroundMonitor': backgroundMonitor,
@@ -125,6 +140,7 @@ class AppSettings {
 
   factory AppSettings.fromJson(Map<String, dynamic> j) => AppSettings(
         fontSize: (j['fontSize'] as num?)?.toDouble() ?? 14,
+        fontSizeMobile: (j['fontSizeMobile'] as num?)?.toDouble() ?? 10.5,
         scrollback: (j['scrollback'] as num?)?.toInt() ?? 5000,
         monitorSeconds: (j['monitorSeconds'] as num?)?.toInt() ?? 3,
         backgroundMonitor: (j['backgroundMonitor'] as bool?) ?? true,

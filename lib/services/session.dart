@@ -66,6 +66,9 @@ class SshTab extends ChangeNotifier {
   bool monitorExpanded = false;
   bool ctrlArmed = false, altArmed = false;
 
+  /// Long-pressed on the touch keys: stays on until tapped again.
+  bool ctrlLocked = false, altLocked = false;
+
   bool _everConnected = false;
   bool _closedByUser = false;
   int _gen = 0;
@@ -342,12 +345,12 @@ class SshTab extends ChangeNotifier {
       } else if (c == 32) {
         out = '\x00';
       }
-      ctrlArmed = false;
+      if (!ctrlLocked) ctrlArmed = false;
       notifyListeners();
     }
     if (altArmed) {
       out = '\x1b$out';
-      altArmed = false;
+      if (!altLocked) altArmed = false;
       notifyListeners();
     }
     try {
@@ -361,6 +364,16 @@ class SshTab extends ChangeNotifier {
   /// single CR. Sending both gives an extra empty line after every command.
   static String normalizeNewlines(String s) =>
       s.replaceAll('\r\n', '\r').replaceAll('\n', '\r');
+
+  /// Send bytes exactly as given (one-tap ^C, ^X ... keys), bypassing
+  /// the Ctrl/Alt modifiers.
+  void sendRaw(String bytes) {
+    final sh = _shell;
+    if (status != TabStatus.connected || sh == null) return;
+    try {
+      sh.write(Uint8List.fromList(utf8.encode(bytes)));
+    } catch (_) {}
+  }
 
   /// Type text into the remote shell (used by buttons like "install nethogs").
   void send(String text) => _onInput(text);

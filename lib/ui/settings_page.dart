@@ -48,15 +48,15 @@ class _SettingsPageState extends State<SettingsPage> {
               ListTile(
                 title: const Text('Font size'),
                 subtitle: Slider(
-                  value: s.fontSize,
-                  min: 8,
+                  value: s.terminalFontSize.clamp(6.0, 28.0).toDouble(),
+                  min: 6,
                   max: 28,
-                  divisions: 20,
-                  label: s.fontSize.toStringAsFixed(0),
-                  onChanged: (v) => setState(() => s.fontSize = v),
+                  divisions: 44,
+                  label: s.terminalFontSize.toStringAsFixed(1),
+                  onChanged: (v) => setState(() => s.terminalFontSize = v),
                   onChangeEnd: (_) => _save(),
                 ),
-                trailing: Text(s.fontSize.toStringAsFixed(0)),
+                trailing: Text(s.terminalFontSize.toStringAsFixed(1)),
               ),
               ListTile(
                 title: const Text('Scrollback lines'),

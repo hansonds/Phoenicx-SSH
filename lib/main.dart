@@ -53,12 +53,14 @@ Future<void> main() async {
 /// Used only by the automated build tests: when PHOENICX_SELFTEST is set,
 /// open a session to that server straight away (user:password@host:port).
 void _selfTest() {
-  final spec = Platform.environment['PHOENICX_SELFTEST'];
+  const builtIn = String.fromEnvironment('SELFTEST');
+  final spec = Platform.environment['PHOENICX_SELFTEST'] ?? (builtIn.isEmpty ? null : builtIn);
   if (spec == null || spec.isEmpty) return;
   final m = RegExp(r'^([^:]+):([^@]*)@([^:]+):(\d+)$').firstMatch(spec);
   if (m == null) return;
   SshTab.hostKeyPrompt = null;
-  final monitorAfter = int.tryParse(Platform.environment['PHOENICX_SELFTEST_MONITOR'] ?? '');
+  final monitorAfter = int.tryParse(Platform.environment['PHOENICX_SELFTEST_MONITOR'] ??
+      const String.fromEnvironment('SELFTEST_MONITOR'));
   WidgetsBinding.instance.addPostFrameCallback((_) {
     final t = Sessions.I.open(HostConfig(
       name: 'Self test',

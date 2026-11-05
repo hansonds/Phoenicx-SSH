@@ -128,11 +128,64 @@ class _TerminalPageState extends State<TerminalPage> {
     _grabFocus();
   }
 
-  void _fontSize(double delta) {
-    final s = Store.I.settings;
-    s.fontSize = (s.fontSize + delta).clamp(8.0, 32.0).toDouble();
-    Store.I.saveSettings();
+  double get _fs => Store.I.settings.terminalFontSize;
+
+  void _setFontSize(double v, {bool save = true}) {
+    Store.I.settings.terminalFontSize = v.clamp(6.0, 32.0).toDouble();
+    if (save) Store.I.saveSettings();
     setState(() {});
+  }
+
+  void _fontSize(double delta) => _setFontSize(_fs + delta);
+
+  // ---- Pinch to zoom (Android). Uses a raw Listener so it never fights the
+  // terminal's own scroll / selection gestures.
+  final Map<int, Offset> _pointers = {};
+  double? _pinchStartDist, _pinchStartSize;
+
+  void _ptrDown(PointerDownEvent e) {
+    _pointers[e.pointer] = e.position;
+    if (_pointers.length == 2) {
+      final p = _pointers.values.toList();
+      _pinchStartDist = (p[0] - p[1]).distance;
+      _pinchStartSize = _fs;
+    }
+  }
+
+  void _ptrMove(PointerMoveEvent e) {
+    if (!_pointers.containsKey(e.pointer)) return;
+    _pointers[e.pointer] = e.position;
+    if (_pointers.length == 2 && _pinchStartDist != null && _pinchStartDist! > 20) {
+      final p = _pointers.values.toList();
+      final scale = (p[0] - p[1]).distance / _pinchStartDist!;
+      final target = (_pinchStartSize! * scale * 2).roundToDouble() / 2; // 0.5 steps
+      if ((target - _fs).abs() >= 0.5) _setFontSize(target, save: false);
+    }
+  }
+
+  void _ptrEnd(PointerEvent e) {
+    _pointers.remove(e.pointer);
+    if (_pointers.length < 2 && _pinchStartDist != null) {
+      _pinchStartDist = null;
+      Store.I.saveSettings();
+    }
+  }
+
+  void _selectAll() {
+    final b = tab.terminal.buffer;
+    tab.controller.setSelection(
+      b.createAnchor(0, 0),
+      b.createAnchor(tab.terminal.viewWidth, b.height - 1),
+    );
+  }
+
+  Future<void> _copyAll() async {
+    await Clipboard.setData(ClipboardData(text: tab.terminal.buffer.getText().trimRight()));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Whole screen copied'), duration: Duration(milliseconds: 900)),
+      );
+    }
   }
 
   @override
@@ -175,17 +228,23 @@ class _TerminalPageState extends State<TerminalPage> {
         child: Container(
           color: PX.terminal.background,
           child: Listener(
-           onPointerUp: _onPointerUp,
+           onPointerUp: (e) {
+             _onPointerUp(e);
+             _ptrEnd(e);
+           },
+           onPointerDown: _touch ? _ptrDown : null,
+           onPointerMove: _touch ? _ptrMove : null,
+           onPointerCancel: _ptrEnd,
            child: TerminalView(
             tab.terminal,
             controller: tab.controller,
             focusNode: _focus,
             autofocus: false,
             enableSuggestions: false,
-            // The copy/paste pop-up is for touch screens only.
-            showToolbar: _touch,
+            // The library's pop-up dims the whole app; we show our own bar.
+            showToolbar: false,
             theme: PX.terminal,
-            textStyle: TerminalStyle(fontSize: settings.fontSize),
+            textStyle: TerminalStyle(fontSize: _fs),
             padding: const EdgeInsets.all(6),
             keyboardType: TextInputType.visiblePassword,
             deleteDetection: _touch,
@@ -208,7 +267,53 @@ class _TerminalPageState extends State<TerminalPage> {
         ),
       ),
       if (tab.status != TabStatus.connected) Positioned(left: 0, right: 0, bottom: 0, child: _statusBanner()),
+      if (_touch)
+        Positioned(
+          top: 8,
+          right: 8,
+          child: AnimatedBuilder(
+            animation: tab.controller,
+            builder: (context, _) =>
+                tab.controller.selection == null ? const SizedBox.shrink() : _selectionBar(),
+          ),
+        ),
     ]);
+  }
+
+  /// Small floating bar shown while text is selected on a touch screen.
+  Widget _selectionBar() {
+    Widget b(IconData i, String label, VoidCallback onTap) => InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(i, size: 18, color: PX.accent2),
+              const SizedBox(width: 5),
+              Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            ]),
+          ),
+        );
+    return Material(
+      color: PX.surface2,
+      elevation: 6,
+      borderRadius: BorderRadius.circular(12),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        b(Icons.content_copy, 'Copy', _copy),
+        b(Icons.select_all, 'All', _selectAll),
+        b(Icons.content_paste, 'Paste', () {
+          tab.controller.clearSelection();
+          _paste();
+        }),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          iconSize: 18,
+          tooltip: 'Clear selection',
+          onPressed: tab.controller.clearSelection,
+          icon: const Icon(Icons.close),
+        ),
+      ]),
+    );
   }
 
   Widget _statusBanner() {
@@ -315,6 +420,39 @@ class _TerminalPageState extends State<TerminalPage> {
           },
           highlight: tab.monitorVisible && wide,
         ),
+        PopupMenuButton<String>(
+          tooltip: 'More',
+          iconSize: 19,
+          padding: EdgeInsets.zero,
+          onSelected: (v) {
+            switch (v) {
+              case 'smaller':
+                _fontSize(-1);
+              case 'bigger':
+                _fontSize(1);
+              case 'selectall':
+                _selectAll();
+              case 'copyall':
+                _copyAll();
+              case 'clear':
+                tab.send('\x0c');
+              case 'reconnect':
+                tab.reconnectNow();
+              case 'dup':
+                Sessions.I.open(tab.host);
+            }
+          },
+          itemBuilder: (_) => [
+            const PopupMenuItem(value: 'smaller', child: Text('Smaller text  (or pinch)')),
+            const PopupMenuItem(value: 'bigger', child: Text('Bigger text  (or pinch)')),
+            const PopupMenuDivider(),
+            const PopupMenuItem(value: 'selectall', child: Text('Select all')),
+            const PopupMenuItem(value: 'copyall', child: Text('Copy whole screen')),
+            const PopupMenuItem(value: 'clear', child: Text('Clear screen')),
+            const PopupMenuItem(value: 'reconnect', child: Text('Reconnect')),
+            const PopupMenuItem(value: 'dup', child: Text('Duplicate session')),
+          ],
+        ),
       ]),
     );
   }
@@ -359,7 +497,9 @@ Widget _dot(TabStatus s) {
 
 Widget statusDot(TabStatus s) => _dot(s);
 
-/// The row of keys phones don't have: Esc, Tab, Ctrl, Alt, arrows...
+/// Keys phones don't have. Row 1: Esc, Tab, Ctrl, Alt, arrows.
+/// Row 2 (scrolls): one-tap shortcuts (^C ^X ^O ...), symbols, Home/End,
+/// PgUp/PgDn, F1-F12. Long-press CTRL or ALT to lock it on.
 class _ExtraKeys extends StatelessWidget {
   final SshTab tab;
   final VoidCallback onPaste;
@@ -367,10 +507,15 @@ class _ExtraKeys extends StatelessWidget {
 
   void _key(TerminalKey k) {
     final ctrl = tab.ctrlArmed, alt = tab.altArmed;
-    tab.ctrlArmed = false;
-    tab.altArmed = false;
+    if (!tab.ctrlLocked) tab.ctrlArmed = false;
+    if (!tab.altLocked) tab.altArmed = false;
     tab.terminal.keyInput(k, ctrl: ctrl, alt: alt);
     tab.refresh();
+    HapticFeedback.selectionClick();
+  }
+
+  void _raw(String s) {
+    tab.sendRaw(s);
     HapticFeedback.selectionClick();
   }
 
@@ -381,66 +526,109 @@ class _ExtraKeys extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget k(String label, VoidCallback onTap, {bool on = false, double w = 46}) => Padding(
+    Widget k(String label, VoidCallback onTap,
+            {bool on = false, bool locked = false, VoidCallback? onLong, double? w, Color? fg}) =>
+        Padding(
           padding: const EdgeInsets.symmetric(horizontal: 2),
           child: Material(
-            color: on ? PX.accent : PX.surface2,
+            color: on ? (locked ? PX.accent2 : PX.accent) : PX.surface2,
             borderRadius: BorderRadius.circular(7),
             child: InkWell(
               borderRadius: BorderRadius.circular(7),
               onTap: onTap,
+              onLongPress: onLong,
               child: SizedBox(
                 width: w,
-                height: 36,
-                child: Center(
-                  child: Text(label,
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: on ? Colors.black : PX.text)),
+                height: 34,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: w == null ? 10 : 0),
+                  child: Center(
+                    child: Text(label,
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: on ? Colors.black : (fg ?? PX.text))),
+                  ),
                 ),
               ),
             ),
           ),
         );
 
+    Widget mod(String label, bool armed, bool locked, void Function(bool armed, bool locked) set) => k(
+          locked ? '$label 🔒' : label,
+          () {
+            if (locked) {
+              set(false, false);
+            } else {
+              set(!armed, false);
+            }
+            tab.refresh();
+          },
+          onLong: () {
+            set(true, true);
+            tab.refresh();
+            HapticFeedback.mediumImpact();
+          },
+          on: armed,
+          locked: locked,
+        );
+
+    final row1 = Row(children: [
+      Expanded(child: k('ESC', () => _key(TerminalKey.escape))),
+      Expanded(child: k('TAB', () => _key(TerminalKey.tab))),
+      Expanded(
+        flex: 2,
+        child: mod('CTRL', tab.ctrlArmed, tab.ctrlLocked, (a, l) {
+          tab.ctrlArmed = a;
+          tab.ctrlLocked = l;
+        }),
+      ),
+      Expanded(
+        child: mod('ALT', tab.altArmed, tab.altLocked, (a, l) {
+          tab.altArmed = a;
+          tab.altLocked = l;
+        }),
+      ),
+      Expanded(child: k('←', () => _key(TerminalKey.arrowLeft))),
+      Expanded(child: k('↑', () => _key(TerminalKey.arrowUp))),
+      Expanded(child: k('↓', () => _key(TerminalKey.arrowDown))),
+      Expanded(child: k('→', () => _key(TerminalKey.arrowRight))),
+    ]);
+
+    const ctrlKeys = ['C', 'D', 'Z', 'X', 'O', 'W', 'K', 'U', 'R', 'L', 'A', 'E'];
+    final row2 = SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(children: [
+        for (final c in ctrlKeys)
+          k('^$c', () => _raw(String.fromCharCode(c.codeUnitAt(0) - 64)), fg: PX.accent2),
+        k('|', () => _text('|'), w: 34),
+        k('/', () => _text('/'), w: 34),
+        k('-', () => _text('-'), w: 34),
+        k('~', () => _text('~'), w: 34),
+        k('\$', () => _text('\$'), w: 34),
+        k('*', () => _text('*'), w: 34),
+        k('HOME', () => _key(TerminalKey.home)),
+        k('END', () => _key(TerminalKey.end)),
+        k('PGUP', () => _key(TerminalKey.pageUp)),
+        k('PGDN', () => _key(TerminalKey.pageDown)),
+        k('DEL', () => _key(TerminalKey.delete)),
+        for (var i = 1; i <= 12; i++)
+          k('F$i', () => _key(TerminalKey.values.byName('f$i'))),
+        k('PASTE', onPaste),
+      ]),
+    );
+
     return Container(
       color: PX.bg,
-      padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 4),
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
       child: SafeArea(
         top: false,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(children: [
-            k('ESC', () => _key(TerminalKey.escape)),
-            k('TAB', () => _key(TerminalKey.tab)),
-            k('CTRL', () {
-              tab.ctrlArmed = !tab.ctrlArmed;
-              tab.refresh();
-            }, on: tab.ctrlArmed),
-            k('ALT', () {
-              tab.altArmed = !tab.altArmed;
-              tab.refresh();
-            }, on: tab.altArmed),
-            k('←', () => _key(TerminalKey.arrowLeft), w: 40),
-            k('↑', () => _key(TerminalKey.arrowUp), w: 40),
-            k('↓', () => _key(TerminalKey.arrowDown), w: 40),
-            k('→', () => _key(TerminalKey.arrowRight), w: 40),
-            k('^C', () => _text('\x03'), w: 40),
-            k('|', () => _text('|'), w: 36),
-            k('/', () => _text('/'), w: 36),
-            k('-', () => _text('-'), w: 36),
-            k('~', () => _text('~'), w: 36),
-            k('HOME', () => _key(TerminalKey.home), w: 52),
-            k('END', () => _key(TerminalKey.end)),
-            k('PGUP', () => _key(TerminalKey.pageUp), w: 52),
-            k('PGDN', () => _key(TerminalKey.pageDown), w: 52),
-            k('F1', () => _key(TerminalKey.f1), w: 38),
-            k('F2', () => _key(TerminalKey.f2), w: 38),
-            k('F10', () => _key(TerminalKey.f10), w: 42),
-            k('PASTE', onPaste, w: 58),
-          ]),
-        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          row1,
+          const SizedBox(height: 4),
+          row2,
+        ]),
       ),
     );
   }
