@@ -541,13 +541,18 @@ class _ExtraKeys extends StatelessWidget {
                 width: w,
                 height: 34,
                 child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: w == null ? 10 : 0),
+                  padding: EdgeInsets.symmetric(horizontal: w == null ? 10 : 2),
                   child: Center(
-                    child: Text(label,
-                        style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
-                            color: on ? Colors.black : (fg ?? PX.text))),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(label,
+                          maxLines: 1,
+                          softWrap: false,
+                          style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: on ? Colors.black : (fg ?? PX.text))),
+                    ),
                   ),
                 ),
               ),
@@ -556,6 +561,7 @@ class _ExtraKeys extends StatelessWidget {
         );
 
     Widget mod(String label, bool armed, bool locked, void Function(bool armed, bool locked) set) => k(
+          w: double.infinity,
           locked ? '$label 🔒' : label,
           () {
             if (locked) {
@@ -575,25 +581,26 @@ class _ExtraKeys extends StatelessWidget {
         );
 
     final row1 = Row(children: [
-      Expanded(child: k('ESC', () => _key(TerminalKey.escape))),
-      Expanded(child: k('TAB', () => _key(TerminalKey.tab))),
+      Expanded(flex: 4, child: k('ESC', () => _key(TerminalKey.escape), w: double.infinity)),
+      Expanded(flex: 4, child: k('TAB', () => _key(TerminalKey.tab), w: double.infinity)),
       Expanded(
-        flex: 2,
+        flex: 5,
         child: mod('CTRL', tab.ctrlArmed, tab.ctrlLocked, (a, l) {
           tab.ctrlArmed = a;
           tab.ctrlLocked = l;
         }),
       ),
       Expanded(
+        flex: 4,
         child: mod('ALT', tab.altArmed, tab.altLocked, (a, l) {
           tab.altArmed = a;
           tab.altLocked = l;
         }),
       ),
-      Expanded(child: k('←', () => _key(TerminalKey.arrowLeft))),
-      Expanded(child: k('↑', () => _key(TerminalKey.arrowUp))),
-      Expanded(child: k('↓', () => _key(TerminalKey.arrowDown))),
-      Expanded(child: k('→', () => _key(TerminalKey.arrowRight))),
+      Expanded(flex: 4, child: k('←', () => _key(TerminalKey.arrowLeft), w: double.infinity)),
+      Expanded(flex: 4, child: k('↑', () => _key(TerminalKey.arrowUp), w: double.infinity)),
+      Expanded(flex: 4, child: k('↓', () => _key(TerminalKey.arrowDown), w: double.infinity)),
+      Expanded(flex: 4, child: k('→', () => _key(TerminalKey.arrowRight), w: double.infinity)),
     ]);
 
     const ctrlKeys = ['C', 'D', 'Z', 'X', 'O', 'W', 'K', 'U', 'R', 'L', 'A', 'E'];

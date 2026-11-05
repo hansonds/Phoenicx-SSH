@@ -285,7 +285,7 @@ class _MonitorPanelState extends State<MonitorPanel> {
         _legend([
           ('used', fmtBytes(m.memUsed), PX.blue),
           ('cache', fmtBytes(cache), PX.blue.withValues(alpha: 0.4)),
-          ('free', fmtBytes((m.memTotal - m.memUsed - cache).clamp(0, m.memTotal)), PX.surface2),
+          ('free', fmtBytes(m.memFree), PX.surface2),
         ]),
         if (m.swapTotal > 0) ...[
           const SizedBox(height: 8),
