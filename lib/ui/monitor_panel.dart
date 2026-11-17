@@ -204,30 +204,33 @@ class _MonitorPanelState extends State<MonitorPanel> {
 
   Widget _gauges(MonitorService m, double width) {
     final root = m.rootDisk;
-    final tiles = <Widget>[
-      _gaugeTile(m.cpu, 'CPU', '${m.cores} cores', PX.gCpu),
-      _gaugeTile(m.memPerc, 'RAM', '${fmtBytes(m.memUsed, digits: 1)} / ${fmtBytes(m.memTotal, digits: 0)}', PX.gMem),
+    final tiles = <Widget Function()>[
+      () => _gaugeTile(m.cpu, 'CPU', '${m.cores} cores', PX.gCpu),
+      () => _gaugeTile(m.memPerc, 'RAM', '${fmtBytes(m.memUsed, digits: 1)} / ${fmtBytes(m.memTotal, digits: 0)}', PX.gMem),
       if (m.swapTotal > 0)
-        _gaugeTile(m.swapPerc, 'Swap', '${fmtBytes(m.swapUsed, digits: 0)} / ${fmtBytes(m.swapTotal, digits: 0)}', PX.gSwap),
+        () => _gaugeTile(m.swapPerc, 'Swap', '${fmtBytes(m.swapUsed, digits: 0)} / ${fmtBytes(m.swapTotal, digits: 0)}', PX.gSwap),
       if (root != null)
-        _gaugeTile(root.perc, 'Disk', '${fmtBytes(root.used, digits: 0)} / ${fmtBytes(root.total, digits: 0)}', PX.gDisk),
+        () => _gaugeTile(root.perc, 'Disk', '${fmtBytes(root.used, digits: 0)} / ${fmtBytes(root.total, digits: 0)}', PX.gDisk),
     ];
-    final cols = width >= 760 ? tiles.length : 2;
+    final cols = width >= 760 || tiles.length == 3 ? tiles.length : 2;
     final gap = 10.0;
     return LayoutBuilder(builder: (context, c) {
       final w = (c.maxWidth - gap * (cols - 1)) / cols;
+      _ringSize = (w - 30).clamp(56.0, 92.0).toDouble();
       return Padding(
         padding: const EdgeInsets.only(bottom: 2),
-        child: Wrap(spacing: gap, children: [for (final t in tiles) SizedBox(width: w, child: t)]),
+        child: Wrap(spacing: gap, children: [for (final t in tiles) SizedBox(width: w, child: t())]),
       );
     });
   }
+
+  double _ringSize = 84;
 
   Widget _gaugeTile(double v, String label, String sub, List<Color> g) => NeonCard(
         colors: g,
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-        child: Center(child: RingGauge(percent: v, label: label, sub: sub, colors: g, size: 84)),
+        child: Center(child: RingGauge(percent: v, label: label, sub: sub, colors: g, size: _ringSize)),
       );
 
   Widget _card({
@@ -423,8 +426,8 @@ class _MonitorPanelState extends State<MonitorPanel> {
           ),
           const SizedBox(height: 10),
           _legend([
-            ('received since boot', fmtBytes(m.rxTotal), PX.mint),
-            ('sent', fmtBytes(m.txTotal), PX.pink),
+            ('received since boot', fmtBytes(m.rxTotal), PX.netGreen),
+            ('sent', fmtBytes(m.txTotal), PX.netPink),
           ]),
           if (m.ifaceRates.length > 1) ...[
             const SizedBox(height: 8),
@@ -443,11 +446,11 @@ class _MonitorPanelState extends State<MonitorPanel> {
           Row(children: [
             _rate(Icons.download_rounded, 'Read', fmtRate(m.diskRead), PX.gDisk),
             const SizedBox(width: 8),
-            _rate(Icons.upload_rounded, 'Write', fmtRate(m.diskWrite), const [PX.accent, PX.pink]),
+            _rate(Icons.upload_rounded, 'Write', fmtRate(m.diskWrite), const [Color(0xFFE07A5F), Color(0xFFEFA48B)]),
           ]),
           const SizedBox(height: 12),
           LiveChart(
-            series: [Series(m.readHist.data, PX.gDisk), Series(m.writeHist.data, const [PX.accent, PX.pink])],
+            series: [Series(m.readHist.data, PX.gDisk), Series(m.writeHist.data, const [Color(0xFFE07A5F), Color(0xFFEFA48B)])],
             height: 64,
             topLabel: (t) => fmtRate(t),
           ),
@@ -529,18 +532,17 @@ class _MonitorPanelState extends State<MonitorPanel> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
-            gradient: on ? const LinearGradient(colors: [PX.violet, PX.neonPurple]) : null,
-            color: on ? null : Colors.white.withValues(alpha: 0.05),
+            color: on ? PX.accent.withValues(alpha: 0.14) : Colors.white.withValues(alpha: 0.04),
             borderRadius: BorderRadius.circular(16),
-            boxShadow: on ? [BoxShadow(color: PX.neonPurple.withValues(alpha: 0.4), blurRadius: 8, spreadRadius: -2)] : null,
+            border: Border.all(color: on ? PX.accent.withValues(alpha: 0.55) : Colors.white.withValues(alpha: 0.08)),
           ),
           child: Text(label,
-              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: on ? Colors.white : PX.muted)),
+              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: on ? PX.accent2 : PX.muted)),
         ),
       );
 
   static const _avatarColors = [
-    PX.gCpu, PX.gMem, PX.gSwap, PX.gRx, PX.gTx, PX.gDisk, [PX.cyan, PX.neonBlue], [PX.pink, PX.accent],
+    PX.gCpu, PX.gMem, PX.gSwap, PX.gDisk, [PX.cyan, PX.cyan], [PX.mint, PX.mint], [PX.pink, PX.pink],
   ];
 
   Widget _avatar(String name) {
@@ -551,13 +553,11 @@ class _MonitorPanelState extends State<MonitorPanel> {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(9),
-        gradient: LinearGradient(
-            colors: [g.first.withValues(alpha: 0.85), g.last.withValues(alpha: 0.85)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight),
+        color: g.first.withValues(alpha: 0.14),
+        border: Border.all(color: g.first.withValues(alpha: 0.3)),
       ),
       child: Text(name.isEmpty ? '?' : name.substring(0, 1).toUpperCase(),
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white)),
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: g.last)),
     );
   }
 

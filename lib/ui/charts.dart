@@ -214,7 +214,7 @@ class _RingPainter extends CustomPainter {
         2 * pi,
         false,
         Paint()
-          ..color = Colors.white.withValues(alpha: 0.07)
+          ..color = Colors.white.withValues(alpha: 0.06)
           ..style = PaintingStyle.stroke
           ..strokeWidth = stroke);
     final sweep = 2 * pi * (percent / 100).clamp(0.0, 1.0);
@@ -228,16 +228,6 @@ class _RingPainter extends CustomPainter {
       -pi / 2,
       3 * pi / 2,
     );
-    canvas.drawArc(
-        rect,
-        -pi / 2,
-        sweep,
-        false,
-        Paint()
-          ..color = colors.last.withValues(alpha: 0.2)
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round
-          ..strokeWidth = stroke + 7);
     canvas.drawArc(
         rect,
         -pi / 2,

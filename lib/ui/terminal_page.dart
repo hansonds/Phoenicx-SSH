@@ -368,7 +368,7 @@ class _TerminalPageState extends State<TerminalPage> {
     return Container(
       height: 46,
       decoration: const BoxDecoration(
-        gradient: LinearGradient(colors: [PX.bg, Color(0xFF0E0920), PX.bg]),
+        color: PX.bg,
       ),
       padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Row(children: [
@@ -396,13 +396,13 @@ class _TerminalPageState extends State<TerminalPage> {
                   ]),
           ),
         if (!_touch || wide) ...[
-          _iconBtn(Icons.text_decrease, 'Smaller text', () => _fontSize(-1), color: PX.accent),
-          _iconBtn(Icons.text_increase, 'Bigger text', () => _fontSize(1), color: PX.accent2),
+          _iconBtn(Icons.text_decrease, 'Smaller text', () => _fontSize(-1), color: PX.soft),
+          _iconBtn(Icons.text_increase, 'Bigger text', () => _fontSize(1), color: PX.soft),
         ],
-        _iconBtn(Icons.content_copy_rounded, 'Copy selection', _copy, color: PX.cyan),
-        _iconBtn(Icons.content_paste_rounded, 'Paste', _paste, color: PX.mint),
+        _iconBtn(Icons.content_copy_rounded, 'Copy selection', _copy, color: Color(0xFF8FB3F7)),
+        _iconBtn(Icons.content_paste_rounded, 'Paste', _paste, color: Color(0xFF7ED3A6)),
         if (_touch && !wide)
-          _iconBtn(Icons.keyboard_rounded, 'Keyboard', color: PX.neonBlue, () {
+          _iconBtn(Icons.keyboard_rounded, 'Keyboard', color: PX.soft, () {
             tab.setMonitorVisible(false);
             _focus.requestFocus();
             SystemChannels.textInput.invokeMethod('TextInput.show');
@@ -411,7 +411,7 @@ class _TerminalPageState extends State<TerminalPage> {
           _iconBtn(
             tab.monitorExpanded ? Icons.close_fullscreen_rounded : Icons.open_in_full_rounded,
             tab.monitorExpanded ? 'Back to terminal + monitor' : 'Full-screen monitor',
-            color: PX.neonPurple,
+            color: Color(0xFFF2A65A),
             () {
               tab.setMonitorExpanded(!tab.monitorExpanded);
               _grabFocus();
@@ -421,7 +421,7 @@ class _TerminalPageState extends State<TerminalPage> {
         PopupMenuButton<String>(
           tooltip: 'More',
           padding: EdgeInsets.zero,
-          child: _btnFace(Icons.more_vert_rounded, PX.pink),
+          child: _btnFace(Icons.more_vert_rounded, PX.soft),
           onSelected: (v) {
             switch (v) {
               case 'smaller':
@@ -462,14 +462,10 @@ class _TerminalPageState extends State<TerminalPage> {
         margin: const EdgeInsets.symmetric(horizontal: 2.5),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [color.withValues(alpha: 0.24), color.withValues(alpha: 0.08)],
-          ),
-          border: Border.all(color: color.withValues(alpha: 0.45)),
+          color: const Color(0xFF1A1D26),
+          border: Border.all(color: const Color(0xFF2B2F3B)),
         ),
-        child: Icon(icon, size: 18, color: Color.lerp(color, Colors.white, 0.15)),
+        child: Icon(icon, size: 18, color: color),
       );
 
   Widget _iconBtn(IconData icon, String tip, VoidCallback onTap, {Color color = PX.text}) => Tooltip(
@@ -502,23 +498,20 @@ class _TerminalPageState extends State<TerminalPage> {
             padding: EdgeInsets.symmetric(horizontal: wide ? 12 : 10),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              gradient: LinearGradient(
-                colors: on ? const [PX.cyan, PX.neonBlue, PX.violet] : PX.gBrand,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: (on ? PX.cyan : PX.neonPurple).withValues(alpha: 0.5),
-                  blurRadius: 12,
-                  spreadRadius: -3,
-                ),
-              ],
+              gradient: on ? null : const LinearGradient(colors: PX.gBrand),
+              color: on ? const Color(0xFF1A1D26) : null,
+              border: on ? Border.all(color: PX.accent.withValues(alpha: 0.7)) : null,
+              boxShadow: on
+                  ? null
+                  : [BoxShadow(color: PX.accent.withValues(alpha: 0.3), blurRadius: 10, spreadRadius: -3)],
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(icon, size: 20, color: Colors.white),
+              Icon(icon, size: 20, color: on ? PX.accent2 : Colors.white),
               if (wide) ...[
                 const SizedBox(width: 6),
                 Text(label,
-                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Colors.white)),
+                    style: TextStyle(
+                        fontSize: 12.5, fontWeight: FontWeight.w800, color: on ? PX.accent2 : Colors.white)),
               ],
             ]),
           ),

@@ -16,24 +16,33 @@ class PX {
   static const red = Color(0xFFF87171);
   static const yellow = Color(0xFFFACC15);
 
-  // Neon palette (matches the Phoenicx SSH logo)
-  static const violet = Color(0xFF7C3AED);
-  static const neonPurple = Color(0xFFA855F7);
-  static const pink = Color(0xFFEC4899);
-  static const cyan = Color(0xFF22D3EE);
-  static const neonBlue = Color(0xFF3B82F6);
-  static const mint = Color(0xFF34D399);
-  static const panelTop = Color(0xFF0B0719);
-  static const panelBottom = Color(0xFF120A26);
-  static const card = Color(0xFF110C22);
+  // Calm, professional palette: neutral charcoal + one warm brand accent,
+  // soft distinct colours per metric.
+  static const violet = Color(0xFF6D7CF0);
+  static const neonPurple = Color(0xFF8E9BF5);
+  static const pink = Color(0xFFE88AAE);
+  static const cyan = Color(0xFF5CC8D8);
+  static const neonBlue = Color(0xFF5B8DEF);
+  static const mint = Color(0xFF4CC38A);
+  static const panelTop = Color(0xFF0D0F15);
+  static const panelBottom = Color(0xFF111319);
+  static const card = Color(0xFF161921);
+  static const cardLine = Color(0xFF262A35);
+  static const soft = Color(0xFFD5D8E0);
 
-  static const gCpu = [Color(0xFFFF3D2E), accent, accent2];
-  static const gMem = [neonBlue, cyan];
-  static const gSwap = [violet, pink];
-  static const gDisk = [Color(0xFFF59E0B), Color(0xFFFDE047)];
-  static const gRx = [mint, cyan];
-  static const gTx = [neonPurple, pink];
-  static const gBrand = [violet, neonPurple, accent];
+  static const gCpu = [Color(0xFFE8743B), Color(0xFFF2A65A)];
+  static const gMem = [Color(0xFF5B8DEF), Color(0xFF8FB3F7)];
+  static const gSwap = [Color(0xFF8E7CF0), Color(0xFFB9A9F7)];
+  static const gDisk = [Color(0xFFD4A03A), Color(0xFFE8C77A)];
+  static const gBrand = [Color(0xFFE8743B), Color(0xFFF2A65A)];
+
+  // Network keeps its original colours.
+  static const netGreen = Color(0xFF34D399);
+  static const netCyan = Color(0xFF22D3EE);
+  static const netPurple = Color(0xFFA855F7);
+  static const netPink = Color(0xFFEC4899);
+  static const gRx = [netGreen, netCyan];
+  static const gTx = [netPurple, netPink];
 
   static const fire = LinearGradient(
     colors: [Color(0xFFFF3D2E), accent, accent2],

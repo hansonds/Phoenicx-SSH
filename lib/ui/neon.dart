@@ -28,14 +28,12 @@ class NeonCard extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            colors.first.withValues(alpha: 0.75),
-            colors.last.withValues(alpha: 0.12),
-            colors.first.withValues(alpha: 0.35),
+            colors.first.withValues(alpha: 0.45),
+            PX.cardLine,
+            PX.cardLine,
           ],
+          stops: const [0.0, 0.45, 1.0],
         ),
-        boxShadow: [
-          BoxShadow(color: colors.first.withValues(alpha: 0.14), blurRadius: 14, spreadRadius: -4),
-        ],
       ),
       padding: const EdgeInsets.all(1.2),
       child: Container(
@@ -46,9 +44,9 @@ class NeonCard extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color.lerp(PX.card, colors.first, 0.07)!,
+              Color.lerp(PX.card, colors.first, 0.05)!,
               PX.card,
-              Color.lerp(PX.card, colors.last, 0.05)!,
+              PX.card,
             ],
           ),
         ),
@@ -75,7 +73,7 @@ class IconBadge extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(size * 0.32),
         gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
-        boxShadow: [BoxShadow(color: colors.first.withValues(alpha: 0.45), blurRadius: 10, spreadRadius: -2)],
+        boxShadow: [BoxShadow(color: colors.first.withValues(alpha: 0.22), blurRadius: 8, spreadRadius: -2)],
       ),
       child: Icon(icon, size: size * 0.56, color: Colors.white),
     );
@@ -166,14 +164,14 @@ class NeonChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: Colors.white.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, size: 13, color: color),
         const SizedBox(width: 5),
-        Text(text, style: TextStyle(fontSize: 11.5, color: Color.lerp(color, Colors.white, 0.55), fontWeight: FontWeight.w600)),
+        Text(text, style: const TextStyle(fontSize: 11.5, color: PX.soft, fontWeight: FontWeight.w600)),
       ]),
     );
   }
@@ -193,7 +191,7 @@ class NeonTabs extends StatelessWidget {
       decoration: BoxDecoration(
         color: PX.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: PX.neonPurple.withValues(alpha: 0.25)),
+        border: Border.all(color: PX.cardLine),
       ),
       child: Row(children: [
         for (var i = 0; i < items.length; i++)
@@ -208,7 +206,7 @@ class NeonTabs extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   gradient: i == selected ? const LinearGradient(colors: PX.gBrand) : null,
                   boxShadow: i == selected
-                      ? [BoxShadow(color: PX.neonPurple.withValues(alpha: 0.45), blurRadius: 12, spreadRadius: -3)]
+                      ? [BoxShadow(color: PX.accent.withValues(alpha: 0.25), blurRadius: 10, spreadRadius: -3)]
                       : null,
                 ),
                 child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
