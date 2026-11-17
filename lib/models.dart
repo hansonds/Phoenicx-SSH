@@ -87,6 +87,49 @@ class HostConfig {
       );
 }
 
+/// A saved command for the Commands panel.
+class Snippet {
+  String name;
+  String command;
+
+  /// Press Enter after pasting.
+  bool run;
+  Snippet(this.name, this.command, {this.run = false});
+
+  Map<String, dynamic> toJson() => {'name': name, 'command': command, 'run': run};
+  factory Snippet.fromJson(Map<String, dynamic> j) => Snippet(
+        (j['name'] as String?) ?? '',
+        (j['command'] as String?) ?? '',
+        run: (j['run'] as bool?) ?? false,
+      );
+
+  static List<Snippet> defaults() => [
+        Snippet('Disk space', 'df -h'),
+        Snippet('Memory', 'free -h'),
+        Snippet('Live processes', 'htop || top'),
+        Snippet('Uptime & load', 'uptime'),
+        Snippet('System info', 'uname -a && cat /etc/os-release'),
+        Snippet('Folder sizes here', 'du -sh * 2>/dev/null | sort -h'),
+        Snippet('List files', 'ls -lah'),
+        Snippet('Update packages', 'sudo apt update && sudo apt upgrade -y'),
+        Snippet('Clean old packages', 'sudo apt autoremove -y && sudo apt clean'),
+        Snippet('Docker: containers', 'docker ps -a'),
+        Snippet('Docker: usage', 'docker stats --no-stream'),
+        Snippet('Docker: start compose', 'docker compose up -d'),
+        Snippet('Docker: logs', 'docker logs -f --tail 100 '),
+        Snippet('Docker: clean up', 'docker system prune -f'),
+        Snippet('Failed services', 'systemctl --failed'),
+        Snippet('Restart a service', 'sudo systemctl restart '),
+        Snippet('Service status', 'systemctl status '),
+        Snippet('Recent system log', 'journalctl -n 50 --no-pager'),
+        Snippet('Open ports', 'sudo ss -tulpn'),
+        Snippet('IP addresses', 'ip -br a'),
+        Snippet('Public IP', 'curl -s ifconfig.me; echo'),
+        Snippet('Ping test', 'ping -c 4 8.8.8.8'),
+        Snippet('Reboot server', 'sudo reboot'),
+      ];
+}
+
 class AppSettings {
   double fontSize;
 
@@ -103,6 +146,11 @@ class AppSettings {
   /// host:port -> "SHA256:..." fingerprint accepted by the user.
   Map<String, String> knownHosts;
 
+  /// Saved commands (null until the user edits the list = defaults).
+  List<Snippet>? _snippets;
+  List<Snippet> get snippets => _snippets ??= Snippet.defaults();
+  set snippets(List<Snippet> v) => _snippets = v;
+
   AppSettings({
     this.fontSize = 14,
     this.fontSizeMobile = 10.5,
@@ -114,7 +162,9 @@ class AppSettings {
     this.rightClickPaste = true,
     this.ctrlVPaste = true,
     Map<String, String>? knownHosts,
-  }) : knownHosts = knownHosts ?? {};
+    List<Snippet>? snippets,
+  })  : knownHosts = knownHosts ?? {},
+        _snippets = snippets;
 
   double get terminalFontSize => Platform.isAndroid ? fontSizeMobile : fontSize;
   set terminalFontSize(double v) {
@@ -136,6 +186,7 @@ class AppSettings {
         'rightClickPaste': rightClickPaste,
         'ctrlVPaste': ctrlVPaste,
         'knownHosts': knownHosts,
+        'snippets': snippets.map((e) => e.toJson()).toList(),
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> j) => AppSettings(
@@ -150,5 +201,9 @@ class AppSettings {
         ctrlVPaste: (j['ctrlVPaste'] as bool?) ?? true,
         knownHosts: ((j['knownHosts'] as Map?) ?? {})
             .map((k, v) => MapEntry(k.toString(), v.toString())),
+        snippets: (j['snippets'] as List?)
+            ?.whereType<Map>()
+            .map((e) => Snippet.fromJson(Map<String, dynamic>.from(e)))
+            .toList(),
       );
 }

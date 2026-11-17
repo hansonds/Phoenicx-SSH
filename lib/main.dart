@@ -10,6 +10,7 @@ import 'services/session.dart';
 import 'services/store.dart';
 import 'theme.dart';
 import 'ui/home_screen.dart';
+import 'ui/terminal_page.dart' show commandsRequest;
 
 final navKey = GlobalKey<NavigatorState>();
 
@@ -70,6 +71,10 @@ void _selfTest() {
       auth: AuthType.password,
       password: m.group(2)!,
     ));
+    final commandsAfter = int.tryParse(Platform.environment['PHOENICX_SELFTEST_COMMANDS'] ?? '');
+    if (commandsAfter != null) {
+      Future.delayed(Duration(seconds: commandsAfter), () => commandsRequest.value++);
+    }
     if (monitorAfter != null) {
       Future.delayed(Duration(seconds: monitorAfter), () => t.setMonitorExpanded(true));
     }

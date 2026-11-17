@@ -61,7 +61,8 @@ class _HostsPageState extends State<HostsPage> {
     );
     if (opts == null) return;
     try {
-      final bytes = await buildBackup(hosts, password: opts.$2, includeSecrets: opts.$1);
+      final bytes = await buildBackup(hosts,
+          password: opts.$2, includeSecrets: opts.$1, snippets: Store.I.settings.snippets);
       final d = DateTime.now();
       final name =
           'phoenicx-ssh-backup-${d.year}${d.month.toString().padLeft(2, '0')}${d.day.toString().padLeft(2, '0')}.json';
@@ -84,23 +85,42 @@ class _HostsPageState extends State<HostsPage> {
     if (f == null) return;
     try {
       final bytes = await f.readAsBytes();
-      List<HostConfig>? list;
+      (List<HostConfig>, List<Snippet>?)? data;
       if (backupIsEncrypted(bytes)) {
         String? error;
-        while (list == null) {
+        while (data == null) {
           if (!mounted) return;
           final pw = await _askPassword(error);
           if (pw == null) return;
           try {
-            list = await readBackup(bytes, password: pw);
+            data = await readBackupFull(bytes, password: pw);
           } on WrongPassword {
             error = 'Wrong password, try again.';
           }
         }
       } else {
-        list = await readBackup(bytes);
+        data = await readBackupFull(bytes);
       }
-      await _merge(list);
+      final snips = data.$2;
+      var newCmds = 0;
+      if (snips != null && snips.isNotEmpty) {
+        final mine = Store.I.settings.snippets;
+        final have = mine.map((e) => e.command.trim()).toSet();
+        for (final c in snips) {
+          if (have.add(c.command.trim())) {
+            mine.add(c);
+            newCmds++;
+          }
+        }
+        Store.I.settings.snippets = mine;
+        await Store.I.saveSettings();
+      }
+      if (data.$1.isEmpty && newCmds > 0) {
+        _snack('Imported $newCmds commands.');
+        return;
+      }
+      await _merge(data.$1);
+      if (newCmds > 0) _snack('Also imported $newCmds commands.');
     } catch (e) {
       _snack('Import failed: $e');
     }

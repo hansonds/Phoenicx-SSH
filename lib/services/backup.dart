@@ -13,11 +13,12 @@ class WrongPassword implements Exception {}
 /// Builds the backup file. With a password, everything (including keys and
 /// passwords) is encrypted with AES-256-GCM using a PBKDF2-SHA256 key.
 Future<Uint8List> buildBackup(List<HostConfig> hosts,
-    {String? password, bool includeSecrets = true}) async {
+    {String? password, bool includeSecrets = true, List<Snippet>? snippets}) async {
   final list = hosts.map((h) => h.toJson(secrets: includeSecrets)).toList();
+  final snips = snippets?.map((e) => e.toJson()).toList();
   final Map<String, dynamic> out;
   if (password != null && password.isNotEmpty) {
-    final plain = utf8.encode(jsonEncode(list));
+    final plain = utf8.encode(jsonEncode(snips == null ? list : {'hosts': list, 'snippets': snips}));
     final enc = await Isolate.run(() {
       final salt = randomBytes(16);
       final key = pbkdf2(password, salt, _iterations);
@@ -38,6 +39,7 @@ Future<Uint8List> buildBackup(List<HostConfig> hosts,
       'format': 1,
       'encrypted': false,
       'hosts': list,
+      if (snips != null) 'snippets': snips,
     };
   }
   return Uint8List.fromList(
@@ -54,7 +56,11 @@ bool backupIsEncrypted(Uint8List bytes) {
 }
 
 /// Reads a backup made by [buildBackup] (or a plain JSON list of hosts).
-Future<List<HostConfig>> readBackup(Uint8List bytes, {String? password}) async {
+Future<List<HostConfig>> readBackup(Uint8List bytes, {String? password}) async =>
+    (await readBackupFull(bytes, password: password)).$1;
+
+/// Hosts plus saved commands (null if the backup has none).
+Future<(List<HostConfig>, List<Snippet>?)> readBackupFull(Uint8List bytes, {String? password}) async {
   dynamic j;
   try {
     j = jsonDecode(utf8.decode(bytes));
@@ -62,6 +68,7 @@ Future<List<HostConfig>> readBackup(Uint8List bytes, {String? password}) async {
     throw const FormatException('This is not a Phoenicx SSH backup file.');
   }
   List list;
+  List? snips;
   if (j is List) {
     list = j;
   } else if (j is Map && j['encrypted'] == true) {
@@ -77,17 +84,30 @@ Future<List<HostConfig>> readBackup(Uint8List bytes, {String? password}) async {
       }
     });
     if (plain == null) throw WrongPassword();
-    list = jsonDecode(utf8.decode(plain)) as List;
+    final inner = jsonDecode(utf8.decode(plain));
+    if (inner is Map) {
+      list = (inner['hosts'] as List?) ?? [];
+      snips = inner['snippets'] as List?;
+    } else {
+      list = inner as List;
+    }
   } else if (j is Map && j['hosts'] is List) {
     list = j['hosts'] as List;
+    snips = j['snippets'] as List?;
   } else {
     throw const FormatException('This is not a Phoenicx SSH backup file.');
   }
-  return list
+  final hosts = list
       .whereType<Map>()
       .map((e) => HostConfig.fromJson(Map<String, dynamic>.from(e)))
       .where((h) => h.host.isNotEmpty)
       .toList();
+  final snippets = snips
+      ?.whereType<Map>()
+      .map((e) => Snippet.fromJson(Map<String, dynamic>.from(e)))
+      .where((e) => e.command.trim().isNotEmpty)
+      .toList();
+  return (hosts, snippets);
 }
 
 /// Windows: reads the sessions saved in PuTTY (registry) including their

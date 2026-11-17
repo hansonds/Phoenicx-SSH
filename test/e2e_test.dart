@@ -79,6 +79,21 @@ void main() {
     final back = await readBackup(bytes, password: 'pw123');
     expect(back.single.privateKey, h.privateKey);
     expect(back.single.password, 'secret');
+
+    // Saved commands travel with the backup (encrypted and plain).
+    final cmds = [Snippet('Disk', 'df -h'), Snippet('Hi', 'echo hi', run: true)];
+    for (final pw in ['pw123', '']) {
+      final b2 = await buildBackup([h], password: pw, snippets: cmds);
+      final full = await readBackupFull(b2, password: pw);
+      expect(full.$1.single.host, h.host);
+      expect(full.$2!.map((e) => e.command), ['df -h', 'echo hi']);
+      expect(full.$2![1].run, true);
+    }
+    // Settings keep the user's order.
+    final st = AppSettings()..snippets = [cmds[1], cmds[0]];
+    final st2 = AppSettings.fromJson(st.toJson());
+    expect(st2.snippets.map((e) => e.name), ['Hi', 'Disk']);
+    expect(AppSettings().snippets, isNotEmpty);
   }, skip: skip);
 
   group('session', () {
@@ -114,6 +129,18 @@ void main() {
       // Only the final, current prompt may be empty - no blank prompts in between.
       final bare = lines.sublist(start).where((l) => l.endsWith('\$') && l.contains('@')).length;
       expect(bare, 1);
+    });
+
+    test('saved command: paste only, and paste + run', () async {
+      // Same steps as tapping a command in the Commands panel.
+      tab.terminal.paste('echo SNIP_\$((3*3))');
+      await Future.delayed(const Duration(milliseconds: 500));
+      expect(screen(tab).contains('SNIP_9'), false, reason: 'paste-only must not run');
+      tab.terminal.keyInput(TerminalKey.enter);
+      await waitFor(() => screen(tab).contains('SNIP_9'), 'pasted command ran after Enter');
+      tab.terminal.paste('echo RUN_\$((4*4))');
+      tab.send('\r');
+      await waitFor(() => screen(tab).contains('RUN_16'), 'run-straight-away command');
     });
 
     test('ctrl+c from the touch keys', () async {

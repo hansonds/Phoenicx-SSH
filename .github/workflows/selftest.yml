@@ -154,7 +154,8 @@ jobs:
           Start-Process python -ArgumentList ".github/selftest/fake_ssh_server.py", $log
           Start-Sleep 4
           $env:PHOENICX_SELFTEST = "test:test@127.0.0.1:2222"
-          $env:PHOENICX_SELFTEST_MONITOR = "100"
+          $env:PHOENICX_SELFTEST_MONITOR = "120"
+          $env:PHOENICX_SELFTEST_COMMANDS = "95"
           $launch = Get-Date
           $env:PHOENICX_KEYLOG = "$env:RUNNER_TEMP\keylog.txt"
           Start-Process "build\windows\x64\runner\Release\phoenicx_ssh.exe"
@@ -236,8 +237,13 @@ jobs:
           Shot "3-selected"
           $clip = Get-Clipboard -Raw
           Write-Host "Clipboard after selecting: [$clip]"
-          # The app opens the full-screen monitor 100 s after start (fake server sends stats)
-          $wait = 125 - ((Get-Date) - $launch).TotalSeconds
+          # The app opens the Commands panel 95 s after start
+          $wait = 101 - ((Get-Date) - $launch).TotalSeconds
+          if ($wait -gt 0) { Start-Sleep -Seconds $wait }
+          Shot "3b-commands"
+          [KB]::Press([byte[]]@(), 0x1B, $false)
+          # ...and the full-screen monitor at 120 s (fake server sends stats)
+          $wait = 145 - ((Get-Date) - $launch).TotalSeconds
           if ($wait -gt 0) { Start-Sleep -Seconds $wait }
           Shot "4-monitor"
           Start-Sleep 6

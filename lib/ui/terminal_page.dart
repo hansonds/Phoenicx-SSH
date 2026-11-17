@@ -8,6 +8,7 @@ import '../services/debug_log.dart';
 import '../services/session.dart';
 import '../services/store.dart';
 import '../theme.dart';
+import 'commands_panel.dart';
 import 'monitor_panel.dart';
 
 class TerminalPage extends StatefulWidget {
@@ -19,6 +20,9 @@ class TerminalPage extends StatefulWidget {
   State<TerminalPage> createState() => _TerminalPageState();
 }
 
+/// Lets the automated tests open the Commands panel.
+final commandsRequest = ValueNotifier<int>(0);
+
 class _TerminalPageState extends State<TerminalPage> {
   final _focus = FocusNode();
   SshTab get tab => widget.tab;
@@ -28,6 +32,16 @@ class _TerminalPageState extends State<TerminalPage> {
   void initState() {
     super.initState();
     if (widget.active) _grabFocus();
+    commandsRequest.addListener(_onCommandsRequest);
+  }
+
+  void _onCommandsRequest() {
+    if (mounted && widget.active) _openCommands();
+  }
+
+  void _openCommands() {
+    tab.setMonitorExpanded(false);
+    showCommands(context, tab, wide: Layout.wide(context), afterPaste: _grabFocus);
   }
 
   @override
@@ -47,6 +61,7 @@ class _TerminalPageState extends State<TerminalPage> {
 
   @override
   void dispose() {
+    commandsRequest.removeListener(_onCommandsRequest);
     _focus.dispose();
     super.dispose();
   }
@@ -399,8 +414,12 @@ class _TerminalPageState extends State<TerminalPage> {
           _iconBtn(Icons.text_decrease, 'Smaller text', () => _fontSize(-1), color: PX.soft),
           _iconBtn(Icons.text_increase, 'Bigger text', () => _fontSize(1), color: PX.soft),
         ],
-        _iconBtn(Icons.content_copy_rounded, 'Copy selection', _copy, color: Color(0xFF8FB3F7)),
+        // Phones copy via the selection bar, so the Commands button takes
+        // the copy button's place there.
+        if (!_touch || wide)
+          _iconBtn(Icons.content_copy_rounded, 'Copy selection', _copy, color: Color(0xFF8FB3F7)),
         _iconBtn(Icons.content_paste_rounded, 'Paste', _paste, color: Color(0xFF7ED3A6)),
+        _commandsBtn(wide),
         if (_touch && !wide)
           _iconBtn(Icons.keyboard_rounded, 'Keyboard', color: PX.soft, () {
             tab.setMonitorVisible(false);
@@ -474,6 +493,35 @@ class _TerminalPageState extends State<TerminalPage> {
           borderRadius: BorderRadius.circular(10),
           onTap: onTap,
           child: _btnFace(icon, color),
+        ),
+      );
+
+  /// Saved Linux commands: tap one to paste it.
+  Widget _commandsBtn(bool wide) => Tooltip(
+        message: 'Commands',
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2.5),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: _openCommands,
+            child: Container(
+              height: 32,
+              padding: EdgeInsets.symmetric(horizontal: wide ? 10 : 7),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                color: const Color(0xFF1A1D26),
+                border: Border.all(color: const Color(0xFF2B2F3B)),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.bolt_rounded, size: 19, color: Color(0xFFF2C46D)),
+                if (wide) ...[
+                  const SizedBox(width: 5),
+                  const Text('Commands',
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: PX.soft)),
+                ],
+              ]),
+            ),
+          ),
         ),
       );
 
