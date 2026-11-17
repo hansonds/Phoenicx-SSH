@@ -7,10 +7,6 @@ on:
         description: "Version number (e.g. 1.0.0)"
         required: true
         default: "1.0.0"
-      play:
-        description: "Also build the Play Store bundle (.aab) into a draft release"
-        type: boolean
-        default: false
   push:
     branches: [main]
     tags:
@@ -87,10 +83,39 @@ jobs:
           done
           rm -f ks.jks out/*.idsig
 
+      - name: Build Play Store bundle (.aab)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+        run: |
+          flutter build appbundle --release --build-name "$V" --build-number "$((100 + ${{ github.run_number }}))" --dart-define=APP_VERSION="$V"
+          cp build/app/outputs/bundle/release/app-release.aab out/app.aab
+
+      - name: Sign the bundle with the Play upload key
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+        env:
+          KEY_B64: ${{ secrets.PLAY_UPLOAD_KEY_BASE64 }}
+          KEY_PASS: ${{ secrets.PLAY_UPLOAD_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEY_B64" ] || [ -z "$KEY_PASS" ]; then
+            echo "::warning::PLAY_UPLOAD_KEY_BASE64 / PLAY_UPLOAD_KEY_PASSWORD not set - bundle left UNSIGNED."
+            mv out/app.aab "out/PhoenicxSSH-$V-play-UNSIGNED.aab"
+            exit 0
+          fi
+          # Flutter signs release builds with the debug key by default; Play rejects that, so strip it first.
+          zip -q -d out/app.aab 'META-INF/MANIFEST.MF' 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*.EC' 'META-INF/*.DSA' || true
+          echo "$KEY_B64" | tr -d ' \r\n' | base64 -d > upload.p12
+          jarsigner -keystore upload.p12 -storetype PKCS12 -storepass:env KEY_PASS -keypass:env KEY_PASS \
+            -digestalg SHA-256 -sigalg SHA256withRSA out/app.aab upload
+          rm -f upload.p12
+          jarsigner -verify out/app.aab | grep "jar verified"
+          if keytool -printcert -jarfile out/app.aab | grep -q "Android Debug"; then echo "::error::Bundle still has the debug signature"; exit 1; fi
+          mv out/app.aab "out/PhoenicxSSH-$V-play.aab"
+
       - uses: actions/upload-artifact@v4
         with:
           name: android
-          path: out/*.apk
+          path: |
+            out/*.apk
+            out/*.aab
 
   windows:
     name: Windows
@@ -129,10 +154,21 @@ jobs:
           New-Item -ItemType Directory -Force out | Out-Null
           Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath "out/PhoenicxSSH-$env:V-Windows-x64-portable.zip"
 
+      - name: Build installer (Setup.exe)
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y | Out-Null
+          $iscc = Get-ChildItem "${env:ProgramFiles(x86)}\Inno Setup*\ISCC.exe", "$env:ProgramFiles\Inno Setup*\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          & $iscc.FullName "/DAppVersion=$env:V" "/DSourceDir=$PWD\build\windows\x64\runner\Release" "/DOutDir=$PWD\out" branding\windows\installer.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Get-ChildItem out
+
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: out/*.zip
+          path: |
+            out/*.zip
+            out/*.exe
 
   release:
     name: Publish release
@@ -157,63 +193,6 @@ jobs:
             **Which file do I need?**
             - Samsung / modern Android phone: `PhoenicxSSH-${{ env.V }}-arm64.apk`
             - Not sure: `PhoenicxSSH-${{ env.V }}-universal.apk` (bigger, works on every Android device)
-            - Windows: unzip `PhoenicxSSH-${{ env.V }}-Windows-x64-portable.zip` and run `PhoenicxSSH.exe`
-
-  playbundle:
-    name: Play Store bundle (.aab)
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.play == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: zulu
-          java-version: "17"
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-      - name: Version
-        run: echo "V=${APP_VERSION#v}" >> $GITHUB_ENV
-      - name: Create Android project files
-        run: |
-          flutter create --org com.hanson --project-name phoenicx_ssh --platforms android .
-          rm -rf test
-          cp branding/android/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
-          printf '\nsubprojects {\n    tasks.configureEach {\n        if (name.startsWith("lintVital")) enabled = false\n    }\n}\n' >> android/build.gradle.kts
-          cp -r branding/android/res/* android/app/src/main/res/
-          KDIR=android/app/src/main/kotlin/com/hanson/phoenicx_ssh
-          mkdir -p $KDIR && rm -f $KDIR/*.kt && cp branding/android/kotlin/*.kt $KDIR/
-      - name: Build app bundle
-        run: |
-          flutter pub get
-          flutter build appbundle --release --build-name "$V" --build-number "$((100 + ${{ github.run_number }}))" --dart-define=APP_VERSION="$V"
-          M=$(find build/app -path "*merged_manifest*release*" -name AndroidManifest.xml | head -1)
-          echo "Manifest: $M"; grep -o 'android:\(minSdkVersion\|targetSdkVersion\|versionCode\|versionName\)="[^"]*"' "$M" || true
-          grep -o 'android:name="android.permission[^"]*"' "$M" || true
-          mkdir -p out && cp build/app/outputs/bundle/release/app-release.aab out/app.aab
-      - name: Sign with the Play upload key (if secrets are set)
-        env:
-          KEY_B64: ${{ secrets.PLAY_UPLOAD_KEY_BASE64 }}
-          KEY_PASS: ${{ secrets.PLAY_UPLOAD_KEY_PASSWORD }}
-        run: |
-          if [ -z "$KEY_B64" ] || [ -z "$KEY_PASS" ]; then
-            echo "::warning::PLAY_UPLOAD_KEY_BASE64 / PLAY_UPLOAD_KEY_PASSWORD not set - bundle left UNSIGNED."
-            mv out/app.aab "out/PhoenicxSSH-$V-play-UNSIGNED.aab"
-            exit 0
-          fi
-          # Flutter signs release builds with the debug key by default; Play rejects that, so strip it first.
-          zip -q -d out/app.aab 'META-INF/MANIFEST.MF' 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*.EC' 'META-INF/*.DSA' || true
-          echo "$KEY_B64" | tr -d ' \r\n' | base64 -d > upload.p12
-          jarsigner -keystore upload.p12 -storetype PKCS12 -storepass:env KEY_PASS -keypass:env KEY_PASS \
-            -digestalg SHA-256 -sigalg SHA256withRSA out/app.aab upload
-          jarsigner -verify out/app.aab | grep "jar verified"
-          if keytool -printcert -jarfile out/app.aab | grep -q "Android Debug"; then echo "::error::Bundle still has the debug signature"; exit 1; fi
-          rm -f upload.p12
-          mv out/app.aab "out/PhoenicxSSH-$V-play.aab"
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: play-v${{ env.V }}
-          name: Play bundle v${{ env.V }} (draft, internal)
-          draft: true
-          files: out/*.aab
+            - Windows (install): `PhoenicxSSH-${{ env.V }}-Windows-Setup.exe`
+            - Windows (no install): unzip `PhoenicxSSH-${{ env.V }}-Windows-x64-portable.zip` and run `PhoenicxSSH.exe`
+            - Google Play Console upload: `PhoenicxSSH-${{ env.V }}-play.aab` (signed with the upload key; not for installing on a phone)
