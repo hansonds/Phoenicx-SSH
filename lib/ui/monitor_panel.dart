@@ -268,7 +268,7 @@ class _MonitorPanelState extends State<MonitorPanel> {
                 decoration: BoxDecoration(
                   color: i.$3,
                   borderRadius: BorderRadius.circular(3),
-                  boxShadow: [BoxShadow(color: i.$3.withValues(alpha: 0.6), blurRadius: 5)],
+
                 ),
               ),
               const SizedBox(width: 5),
@@ -331,7 +331,7 @@ class _MonitorPanelState extends State<MonitorPanel> {
                               end: Alignment.topCenter,
                               colors: PX.gCpu,
                             ),
-                            boxShadow: [BoxShadow(color: PX.accent.withValues(alpha: 0.35), blurRadius: 6)],
+
                           ),
                         ),
                       ),

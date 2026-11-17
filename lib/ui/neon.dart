@@ -34,7 +34,7 @@ class NeonCard extends StatelessWidget {
           ],
         ),
         boxShadow: [
-          BoxShadow(color: colors.first.withValues(alpha: 0.16), blurRadius: 22, spreadRadius: -4),
+          BoxShadow(color: colors.first.withValues(alpha: 0.14), blurRadius: 14, spreadRadius: -4),
         ],
       ),
       padding: const EdgeInsets.all(1.2),
@@ -52,7 +52,9 @@ class NeonCard extends StatelessWidget {
             ],
           ),
         ),
-        child: child,
+        // Content updates every few seconds; keep the glowing frame out of
+        // those repaints.
+        child: RepaintBoundary(child: child),
       ),
     );
   }
@@ -120,7 +122,8 @@ class _PulseDotState extends State<PulseDot> with SingleTickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     final s = widget.size;
-    return SizedBox(
+    return RepaintBoundary(
+     child: SizedBox(
       width: s * 2.4,
       height: s * 2.4,
       child: AnimatedBuilder(
@@ -137,14 +140,11 @@ class _PulseDotState extends State<PulseDot> with SingleTickerProviderStateMixin
           Container(
             width: s,
             height: s,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: widget.color,
-              boxShadow: [BoxShadow(color: widget.color, blurRadius: 6)],
-            ),
+            decoration: BoxDecoration(shape: BoxShape.circle, color: widget.color),
           ),
         ]),
       ),
+     ),
     );
   }
 }

@@ -106,13 +106,14 @@ class _ChartPainter extends CustomPainter {
           ).createShader(rect),
       );
       final lineShader = LinearGradient(colors: s.colors).createShader(rect);
+      // Soft glow: a wide, faint stroke (much cheaper than a blur filter).
       canvas.drawPath(
         path,
         Paint()
-          ..shader = lineShader
-          ..strokeWidth = 5
+          ..color = s.main.withValues(alpha: 0.18)
+          ..strokeWidth = 6
           ..style = PaintingStyle.stroke
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+          ..strokeJoin = StrokeJoin.round,
       );
       canvas.drawPath(
         path,
@@ -233,11 +234,10 @@ class _RingPainter extends CustomPainter {
         sweep,
         false,
         Paint()
-          ..shader = shader
+          ..color = colors.last.withValues(alpha: 0.2)
           ..style = PaintingStyle.stroke
           ..strokeCap = StrokeCap.round
-          ..strokeWidth = stroke + 4
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
+          ..strokeWidth = stroke + 7);
     canvas.drawArc(
         rect,
         -pi / 2,
