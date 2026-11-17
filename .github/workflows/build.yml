@@ -163,6 +163,21 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Get-ChildItem out
 
+      - name: Test the installer (silent install + uninstall)
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem out\*-Setup.exe | Select-Object -First 1
+          $dir = "$env:RUNNER_TEMP\PhoenicxTest"
+          Start-Process $setup.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/CURRENTUSER","/DIR=`"$dir`"" -Wait
+          foreach ($f in "PhoenicxSSH.exe","flutter_windows.dll","data\app.so") {
+            if (!(Test-Path "$dir\$f")) { Write-Error "Installer is missing $f"; exit 1 }
+          }
+          Write-Host "Installed OK:"; Get-ChildItem $dir | Select-Object Name, Length
+          Start-Process "$dir\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait
+          Start-Sleep 3
+          if (Test-Path "$dir\PhoenicxSSH.exe") { Write-Error "Uninstall left files"; exit 1 }
+          Write-Host "Uninstalled OK"
+
       - uses: actions/upload-artifact@v4
         with:
           name: windows
