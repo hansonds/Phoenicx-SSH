@@ -202,10 +202,13 @@ jobs:
             mv out/app.aab "out/PhoenicxSSH-$V-play-UNSIGNED.aab"
             exit 0
           fi
+          # Flutter signs release builds with the debug key by default; Play rejects that, so strip it first.
+          zip -q -d out/app.aab 'META-INF/MANIFEST.MF' 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*.EC' 'META-INF/*.DSA' || true
           echo "$KEY_B64" | tr -d ' \r\n' | base64 -d > upload.p12
           jarsigner -keystore upload.p12 -storetype PKCS12 -storepass:env KEY_PASS -keypass:env KEY_PASS \
             -digestalg SHA-256 -sigalg SHA256withRSA out/app.aab upload
-          jarsigner -verify out/app.aab | tail -1
+          jarsigner -verify out/app.aab | grep "jar verified"
+          if keytool -printcert -jarfile out/app.aab | grep -q "Android Debug"; then echo "::error::Bundle still has the debug signature"; exit 1; fi
           rm -f upload.p12
           mv out/app.aab "out/PhoenicxSSH-$V-play.aab"
       - uses: softprops/action-gh-release@v2
