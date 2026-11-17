@@ -218,10 +218,11 @@ class _RingPainter extends CustomPainter {
           ..strokeWidth = stroke);
     final sweep = 2 * pi * (percent / 100).clamp(0.0, 1.0);
     if (sweep <= 0.001) return;
+    final ringColors = [...colors, colors.first];
     final shader = ui.Gradient.sweep(
       rect.center,
-      [...colors, colors.first],
-      null,
+      ringColors,
+      [for (var i = 0; i < ringColors.length; i++) i / (ringColors.length - 1)],
       TileMode.clamp,
       -pi / 2,
       3 * pi / 2,
