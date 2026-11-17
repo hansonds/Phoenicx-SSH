@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -6,11 +7,14 @@ import '../theme.dart';
 
 class Series {
   final List<double> data;
-  final Color color;
-  const Series(this.data, this.color);
+  final List<Color> colors; // gradient along the line (left -> right)
+  Series(this.data, Object color)
+      : colors = color is List<Color> ? color : [color as Color, color];
+  Color get main => colors.last;
 }
 
-/// Tiny dependency-free live line chart.
+/// Dependency-free live line chart with gradient lines, soft glow and a
+/// filled area.
 class LiveChart extends StatelessWidget {
   final List<Series> series;
   final double? maxY;
@@ -32,9 +36,7 @@ class LiveChart extends StatelessWidget {
     return SizedBox(
       height: height,
       width: double.infinity,
-      child: CustomPaint(
-        painter: _ChartPainter(series, maxY, capacity, topLabel),
-      ),
+      child: CustomPaint(painter: _ChartPainter(series, maxY, capacity, topLabel)),
     );
   }
 }
@@ -49,11 +51,13 @@ class _ChartPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final grid = Paint()
-      ..color = PX.line
+      ..color = Colors.white.withValues(alpha: 0.05)
       ..strokeWidth = 1;
     for (var i = 1; i < 4; i++) {
       final y = size.height * i / 4;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
+      for (double x = 0; x < size.width; x += 8) {
+        canvas.drawLine(Offset(x, y), Offset(x + 4, y), grid);
+      }
     }
     var top = maxY ?? 0;
     if (maxY == null) {
@@ -72,22 +76,25 @@ class _ChartPainter extends CustomPainter {
       tp.paint(canvas, Offset(size.width - tp.width - 2, 1));
     }
     final step = size.width / max(1, capacity - 1);
+    final rect = Offset.zero & size;
     for (final s in series) {
       if (s.data.length < 2) continue;
       final start = capacity - s.data.length;
-      final path = Path();
-      for (var i = 0; i < s.data.length; i++) {
-        final x = (start + i) * step;
-        final y = size.height - (s.data[i] / top).clamp(0.0, 1.0) * size.height;
-        if (i == 0) {
-          path.moveTo(x, y);
-        } else {
-          path.lineTo(x, y);
-        }
+      final pts = <Offset>[
+        for (var i = 0; i < s.data.length; i++)
+          Offset((start + i) * step,
+              size.height - (s.data[i] / top).clamp(0.0, 1.0) * (size.height - 2) - 1),
+      ];
+      // Smooth curve through the points.
+      final path = Path()..moveTo(pts[0].dx, pts[0].dy);
+      for (var i = 1; i < pts.length; i++) {
+        final p0 = pts[i - 1], p1 = pts[i];
+        final mx = (p0.dx + p1.dx) / 2;
+        path.cubicTo(mx, p0.dy, mx, p1.dy, p1.dx, p1.dy);
       }
       final fill = Path.from(path)
-        ..lineTo((start + s.data.length - 1) * step, size.height)
-        ..lineTo(start * step, size.height)
+        ..lineTo(pts.last.dx, size.height)
+        ..lineTo(pts.first.dx, size.height)
         ..close();
       canvas.drawPath(
         fill,
@@ -95,17 +102,31 @@ class _ChartPainter extends CustomPainter {
           ..shader = LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [s.color.withValues(alpha: 0.35), s.color.withValues(alpha: 0.02)],
-          ).createShader(Offset.zero & size),
+            colors: [s.main.withValues(alpha: 0.38), s.main.withValues(alpha: 0.0)],
+          ).createShader(rect),
+      );
+      final lineShader = LinearGradient(colors: s.colors).createShader(rect);
+      canvas.drawPath(
+        path,
+        Paint()
+          ..shader = lineShader
+          ..strokeWidth = 5
+          ..style = PaintingStyle.stroke
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
       );
       canvas.drawPath(
         path,
         Paint()
-          ..color = s.color
-          ..strokeWidth = 1.6
+          ..shader = lineShader
+          ..strokeWidth = 2
           ..style = PaintingStyle.stroke
-          ..strokeJoin = StrokeJoin.round,
+          ..strokeJoin = StrokeJoin.round
+          ..strokeCap = StrokeCap.round,
       );
+      // Glowing dot on the latest value.
+      final last = pts.last;
+      canvas.drawCircle(last, 5, Paint()..color = s.main.withValues(alpha: 0.3));
+      canvas.drawCircle(last, 2.6, Paint()..color = Colors.white);
     }
   }
 
@@ -113,7 +134,7 @@ class _ChartPainter extends CustomPainter {
   bool shouldRepaint(covariant _ChartPainter old) => true;
 }
 
-/// Horizontal usage bar.
+/// Horizontal usage bar (kept for small lists).
 class UsageBar extends StatelessWidget {
   final double percent;
   final Color color;
@@ -126,7 +147,7 @@ class UsageBar extends StatelessWidget {
       child: SizedBox(
         height: 6,
         child: Stack(children: [
-          Container(color: PX.surface2),
+          Container(color: Colors.white.withValues(alpha: 0.06)),
           FractionallySizedBox(
             widthFactor: (percent / 100).clamp(0.0, 1.0),
             child: Container(color: color),
@@ -137,15 +158,15 @@ class UsageBar extends StatelessWidget {
   }
 }
 
-/// Circular percentage gauge.
+/// Circular gauge with a gradient arc and glow.
 class RingGauge extends StatelessWidget {
   final double percent;
   final String label;
   final String? sub;
-  final Color color;
+  final List<Color> colors;
   final double size;
   const RingGauge(
-      {super.key, required this.percent, required this.label, this.sub, required this.color, this.size = 74});
+      {super.key, required this.percent, required this.label, this.sub, required this.colors, this.size = 86});
 
   @override
   Widget build(BuildContext context) {
@@ -153,55 +174,83 @@ class RingGauge extends StatelessWidget {
       SizedBox(
         width: size,
         height: size,
-        child: CustomPaint(
-          painter: _RingPainter(percent, color),
-          child: Center(
-            child: Text('${percent.toStringAsFixed(0)}%',
-                style: TextStyle(fontSize: size * 0.22, fontWeight: FontWeight.w700)),
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(end: percent.clamp(0, 100).toDouble()),
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeOutCubic,
+          builder: (context, v, _) => CustomPaint(
+            painter: _RingPainter(v, colors),
+            child: Center(
+              child: Text('${v.toStringAsFixed(0)}%',
+                  style: TextStyle(fontSize: size * 0.23, fontWeight: FontWeight.w800, height: 1)),
+            ),
           ),
         ),
       ),
-      const SizedBox(height: 6),
-      Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 8),
+      Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
       if (sub != null)
-        Text(sub!, style: const TextStyle(fontSize: 10.5, color: PX.muted), textAlign: TextAlign.center),
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Text(sub!, style: const TextStyle(fontSize: 10.5, color: PX.muted), textAlign: TextAlign.center),
+        ),
     ]);
   }
 }
 
 class _RingPainter extends CustomPainter {
   final double percent;
-  final Color color;
-  _RingPainter(this.percent, this.color);
+  final List<Color> colors;
+  _RingPainter(this.percent, this.colors);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final stroke = size.width * 0.1;
-    final rect = Rect.fromLTWH(stroke / 2, stroke / 2, size.width - stroke, size.height - stroke);
+    final stroke = size.width * 0.095;
+    final rect = Rect.fromLTWH(stroke / 2 + 3, stroke / 2 + 3, size.width - stroke - 6, size.height - stroke - 6);
     canvas.drawArc(
         rect,
         0,
         2 * pi,
         false,
         Paint()
-          ..color = PX.surface2
+          ..color = Colors.white.withValues(alpha: 0.07)
           ..style = PaintingStyle.stroke
           ..strokeWidth = stroke);
-    final c = percent >= 90 ? PX.red : (percent >= 75 ? PX.yellow : color);
+    final sweep = 2 * pi * (percent / 100).clamp(0.0, 1.0);
+    if (sweep <= 0.001) return;
+    final shader = ui.Gradient.sweep(
+      rect.center,
+      [...colors, colors.first],
+      null,
+      TileMode.clamp,
+      -pi / 2,
+      3 * pi / 2,
+    );
     canvas.drawArc(
         rect,
         -pi / 2,
-        2 * pi * (percent / 100).clamp(0.0, 1.0),
+        sweep,
         false,
         Paint()
-          ..color = c
+          ..shader = shader
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = stroke + 4
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
+    canvas.drawArc(
+        rect,
+        -pi / 2,
+        sweep,
+        false,
+        Paint()
+          ..shader = shader
           ..style = PaintingStyle.stroke
           ..strokeCap = StrokeCap.round
           ..strokeWidth = stroke);
   }
 
   @override
-  bool shouldRepaint(covariant _RingPainter old) => old.percent != percent || old.color != color;
+  bool shouldRepaint(covariant _RingPainter old) => old.percent != percent || old.colors != colors;
 }
 
 /// A bar split into coloured parts (e.g. memory used / cache / free).
@@ -211,17 +260,18 @@ class StackedBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sum = parts.fold<double>(0, (a, b) => a + b.$1);
     return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(5),
       child: SizedBox(
-        height: 8,
+        height: 9,
         child: Row(children: [
           for (final p in parts)
             if (p.$1 > 0) Expanded(flex: max(1, (p.$1 * 1000).round()), child: Container(color: p.$2)),
-          if (parts.fold<double>(0, (a, b) => a + b.$1) < 1)
+          if (sum < 1)
             Expanded(
-              flex: max(1, ((1 - parts.fold<double>(0, (a, b) => a + b.$1)) * 1000).round()),
-              child: Container(color: PX.surface2),
+              flex: max(1, ((1 - sum) * 1000).round()),
+              child: Container(color: Colors.white.withValues(alpha: 0.06)),
             ),
         ]),
       ),

@@ -366,18 +366,23 @@ class _TerminalPageState extends State<TerminalPage> {
     final m = tab.monitor;
     final connected = tab.status == TabStatus.connected;
     return Container(
-      height: 40,
-      color: PX.bg,
+      height: 46,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(colors: [PX.bg, Color(0xFF0E0920), PX.bg]),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Row(children: [
         _dot(tab.status),
         const SizedBox(width: 6),
         Expanded(
-          child: Text(
-            tab.remoteTitle?.isNotEmpty == true ? tab.remoteTitle! : tab.host.address,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12.5, color: PX.muted),
-          ),
+          // Phones: the tab already shows the server name; keep room for buttons.
+          child: (_touch && !wide)
+              ? const SizedBox.shrink()
+              : Text(
+                  tab.remoteTitle?.isNotEmpty == true ? tab.remoteTitle! : tab.host.address,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12.5, color: PX.muted),
+                ),
         ),
         if (connected)
           AnimatedBuilder(
@@ -391,39 +396,32 @@ class _TerminalPageState extends State<TerminalPage> {
                   ]),
           ),
         if (!_touch || wide) ...[
-          _iconBtn(Icons.text_decrease, 'Smaller text', () => _fontSize(-1)),
-          _iconBtn(Icons.text_increase, 'Bigger text', () => _fontSize(1)),
+          _iconBtn(Icons.text_decrease, 'Smaller text', () => _fontSize(-1), color: PX.accent),
+          _iconBtn(Icons.text_increase, 'Bigger text', () => _fontSize(1), color: PX.accent2),
         ],
-        _iconBtn(Icons.content_copy, 'Copy selection', _copy),
-        _iconBtn(Icons.content_paste, 'Paste', _paste),
+        _iconBtn(Icons.content_copy_rounded, 'Copy selection', _copy, color: PX.cyan),
+        _iconBtn(Icons.content_paste_rounded, 'Paste', _paste, color: PX.mint),
         if (_touch && !wide)
-          _iconBtn(Icons.keyboard, 'Keyboard', () {
+          _iconBtn(Icons.keyboard_rounded, 'Keyboard', color: PX.neonBlue, () {
             tab.setMonitorVisible(false);
             _focus.requestFocus();
             SystemChannels.textInput.invokeMethod('TextInput.show');
           }),
         if (wide && tab.monitorVisible)
           _iconBtn(
-            tab.monitorExpanded ? Icons.close_fullscreen : Icons.open_in_full,
+            tab.monitorExpanded ? Icons.close_fullscreen_rounded : Icons.open_in_full_rounded,
             tab.monitorExpanded ? 'Back to terminal + monitor' : 'Full-screen monitor',
+            color: PX.neonPurple,
             () {
               tab.setMonitorExpanded(!tab.monitorExpanded);
               _grabFocus();
             },
           ),
-        _iconBtn(
-          tab.monitorVisible ? Icons.terminal : Icons.monitor_heart_outlined,
-          tab.monitorVisible ? (wide ? 'Hide monitor' : 'Show terminal') : 'Server monitor',
-          () {
-            tab.setMonitorVisible(!tab.monitorVisible);
-            _grabFocus();
-          },
-          highlight: tab.monitorVisible && wide,
-        ),
+        _monitorBtn(wide),
         PopupMenuButton<String>(
           tooltip: 'More',
-          iconSize: 19,
           padding: EdgeInsets.zero,
+          child: _btnFace(Icons.more_vert_rounded, PX.pink),
           onSelected: (v) {
             switch (v) {
               case 'smaller':
@@ -457,15 +455,77 @@ class _TerminalPageState extends State<TerminalPage> {
     );
   }
 
-  Widget _iconBtn(IconData icon, String tip, VoidCallback onTap, {bool highlight = false}) =>
-      IconButton(
-        tooltip: tip,
-        visualDensity: VisualDensity.compact,
-        iconSize: 19,
-        color: highlight ? PX.accent : PX.text,
-        onPressed: onTap,
-        icon: Icon(icon),
+  /// Coloured rounded button used across the toolbar.
+  Widget _btnFace(IconData icon, Color color) => Container(
+        width: 34,
+        height: 32,
+        margin: const EdgeInsets.symmetric(horizontal: 2.5),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [color.withValues(alpha: 0.24), color.withValues(alpha: 0.08)],
+          ),
+          border: Border.all(color: color.withValues(alpha: 0.45)),
+        ),
+        child: Icon(icon, size: 18, color: Color.lerp(color, Colors.white, 0.15)),
       );
+
+  Widget _iconBtn(IconData icon, String tip, VoidCallback onTap, {Color color = PX.text}) => Tooltip(
+        message: tip,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: onTap,
+          child: _btnFace(icon, color),
+        ),
+      );
+
+  /// The Monitor button stands out: bigger, gradient, glowing.
+  Widget _monitorBtn(bool wide) {
+    final on = tab.monitorVisible;
+    final icon = on ? Icons.terminal_rounded : Icons.monitor_heart_rounded;
+    final label = on ? (wide ? 'Hide monitor' : 'Terminal') : 'Monitor';
+    return Tooltip(
+      message: on ? (wide ? 'Hide monitor' : 'Show terminal') : 'Server monitor',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            tab.setMonitorVisible(!on);
+            _grabFocus();
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            height: 34,
+            padding: EdgeInsets.symmetric(horizontal: wide ? 12 : 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              gradient: LinearGradient(
+                colors: on ? const [PX.cyan, PX.neonBlue, PX.violet] : PX.gBrand,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: (on ? PX.cyan : PX.neonPurple).withValues(alpha: 0.5),
+                  blurRadius: 12,
+                  spreadRadius: -3,
+                ),
+              ],
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(icon, size: 20, color: Colors.white),
+              if (wide) ...[
+                const SizedBox(width: 6),
+                Text(label,
+                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Colors.white)),
+              ],
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _mini(String label, double v, Color c) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4),

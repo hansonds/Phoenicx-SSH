@@ -4,6 +4,7 @@ import '../services/monitor.dart';
 import '../services/session.dart';
 import '../theme.dart';
 import 'charts.dart';
+import 'neon.dart';
 
 class MonitorPanel extends StatefulWidget {
   final SshTab tab;
@@ -84,7 +85,13 @@ class _MonitorPanelState extends State<MonitorPanel> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: PX.surface,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [PX.panelTop, PX.panelBottom],
+        ),
+      ),
       child: AnimatedBuilder(
         animation: Listenable.merge([tab, tab.monitor, tab.nethogs, tab.nethogsTool]),
         builder: (context, _) {
@@ -104,25 +111,37 @@ class _MonitorPanelState extends State<MonitorPanel> {
             final left = [_cpuCard(m), _memCard(m)];
             final right = [_netCard(m), _diskCard(m)];
             return ListView(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 20),
+              padding: EdgeInsets.fromLTRB(twoCol ? 18 : 12, 14, twoCol ? 18 : 12, 24),
               children: [
                 _header(m),
-                const SizedBox(height: 10),
-                _gauges(m),
-                const SizedBox(height: 10),
+                _gauges(m, box.maxWidth),
                 if (twoCol)
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Expanded(child: Column(children: left)),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
                     Expanded(child: Column(children: right)),
                   ])
                 else ...[...left, ...right],
-                const SizedBox(height: 6),
-                _segments(),
-                const SizedBox(height: 10),
-                if (_view == 0) ..._processes(m),
-                if (_view == 1) ..._docker(m),
-                if (_view == 2) ..._netApps(),
+                const SizedBox(height: 4),
+                NeonTabs(
+                  items: const [
+                    (Icons.apps_rounded, 'Processes'),
+                    (Icons.inventory_2_rounded, 'Docker'),
+                    (Icons.swap_vert_rounded, 'Net / app'),
+                  ],
+                  selected: _view,
+                  onChanged: _setView,
+                ),
+                const SizedBox(height: 12),
+                NeonCard(
+                  colors: const [PX.neonPurple, PX.cyan],
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    if (_view == 0) ..._processes(m),
+                    if (_view == 1) ..._docker(m),
+                    if (_view == 2) ..._netApps(),
+                  ]),
+                ),
               ],
             );
           });
@@ -134,131 +153,148 @@ class _MonitorPanelState extends State<MonitorPanel> {
   // ------------------------------------------------------------ overview
 
   Widget _header(MonitorService m) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: _box(),
+    return NeonCard(
+      colors: PX.gBrand,
+      padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          const Icon(Icons.dns_rounded, size: 18, color: PX.accent),
-          const SizedBox(width: 8),
+          const IconBadge(Icons.dns_rounded, size: 40),
+          const SizedBox(width: 12),
           Expanded(
-            child: Text(m.hostname.isEmpty ? tab.host.host : m.hostname,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              GradientText(
+                m.hostname.isEmpty ? tab.host.host : m.hostname,
+                colors: const [Colors.white, Color(0xFFE9D5FF)],
+                style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: 0.2),
+              ),
+              if (m.os.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text('${m.os}  ·  ${m.kernel}  ·  ${m.arch}',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11.5, color: PX.muted)),
+                ),
+            ]),
           ),
-          if (tab.monitor.running)
-            const Tooltip(
-              message: 'Live',
-              child: Icon(Icons.circle, size: 9, color: PX.green),
+          if (m.running)
+            Container(
+              padding: const EdgeInsets.only(right: 10),
+              decoration: BoxDecoration(
+                color: PX.mint.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: PX.mint.withValues(alpha: 0.35)),
+              ),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                PulseDot(size: 7),
+                Text('LIVE', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: PX.mint, letterSpacing: 1)),
+              ]),
             ),
         ]),
-        if (m.os.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 3, left: 26),
-            child: Text('${m.os} · ${m.kernel} · ${m.arch}',
-                style: const TextStyle(fontSize: 11.5, color: PX.muted)),
-          ),
-        const SizedBox(height: 8),
-        Wrap(spacing: 6, runSpacing: 6, children: [
-          _chip(Icons.memory, '${m.cores} cores'),
-          _chip(Icons.timer_outlined, 'up ${fmtDuration(m.uptime)}'),
-          _chip(Icons.speed, 'load ${m.load.map((e) => e.toStringAsFixed(2)).join(' · ')}'),
+        const SizedBox(height: 12),
+        Wrap(spacing: 7, runSpacing: 7, children: [
+          NeonChip(Icons.memory_rounded, '${m.cores} cores', color: PX.accent),
+          NeonChip(Icons.timer_outlined, 'up ${fmtDuration(m.uptime)}', color: PX.cyan),
+          NeonChip(Icons.speed_rounded, 'load ${m.load.map((e) => e.toStringAsFixed(2)).join(' · ')}',
+              color: PX.neonPurple),
+          if (tab.host.host.isNotEmpty) NeonChip(Icons.public, tab.host.host, color: PX.pink),
         ]),
       ]),
     );
   }
 
-  Widget _gauges(MonitorService m) {
+  Widget _gauges(MonitorService m, double width) {
     final root = m.rootDisk;
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
-      decoration: _box(),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-        RingGauge(percent: m.cpu, label: 'CPU', sub: '${m.cores} cores', color: PX.accent),
-        RingGauge(percent: m.memPerc, label: 'RAM', sub: fmtBytes(m.memTotal, digits: 0), color: PX.blue),
-        if (m.swapTotal > 0)
-          RingGauge(percent: m.swapPerc, label: 'Swap', sub: fmtBytes(m.swapTotal, digits: 0), color: PX.purple),
-        if (root != null)
-          RingGauge(percent: root.perc, label: 'Disk', sub: fmtBytes(root.total, digits: 0), color: PX.yellow),
-      ]),
-    );
+    final tiles = <Widget>[
+      _gaugeTile(m.cpu, 'CPU', '${m.cores} cores', PX.gCpu),
+      _gaugeTile(m.memPerc, 'RAM', '${fmtBytes(m.memUsed, digits: 1)} / ${fmtBytes(m.memTotal, digits: 0)}', PX.gMem),
+      if (m.swapTotal > 0)
+        _gaugeTile(m.swapPerc, 'Swap', '${fmtBytes(m.swapUsed, digits: 0)} / ${fmtBytes(m.swapTotal, digits: 0)}', PX.gSwap),
+      if (root != null)
+        _gaugeTile(root.perc, 'Disk', '${fmtBytes(root.used, digits: 0)} / ${fmtBytes(root.total, digits: 0)}', PX.gDisk),
+    ];
+    final cols = width >= 760 ? tiles.length : 2;
+    final gap = 10.0;
+    return LayoutBuilder(builder: (context, c) {
+      final w = (c.maxWidth - gap * (cols - 1)) / cols;
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 2),
+        child: Wrap(spacing: gap, children: [for (final t in tiles) SizedBox(width: w, child: t)]),
+      );
+    });
   }
 
-  BoxDecoration _box() => BoxDecoration(
-        color: PX.bg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: PX.line),
+  Widget _gaugeTile(double v, String label, String sub, List<Color> g) => NeonCard(
+        colors: g,
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+        child: Center(child: RingGauge(percent: v, label: label, sub: sub, colors: g, size: 84)),
       );
 
-  Widget _chip(IconData i, String t) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(color: PX.surface2, borderRadius: BorderRadius.circular(20)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(i, size: 13, color: PX.muted),
-          const SizedBox(width: 4),
-          Text(t, style: const TextStyle(fontSize: 11.5, color: PX.muted)),
-        ]),
-      );
-
-  Widget _card({required String title, String value = '', required List<Widget> children, Color color = PX.accent}) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      decoration: _box(),
+  Widget _card({
+    required String title,
+    required IconData icon,
+    required List<Color> colors,
+    Widget? value,
+    required List<Widget> children,
+  }) {
+    return NeonCard(
+      colors: colors,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-          const SizedBox(width: 6),
-          Text(title, style: const TextStyle(fontSize: 12.5, color: PX.muted, fontWeight: FontWeight.w600)),
+          IconBadge(icon, colors: colors, size: 30),
+          const SizedBox(width: 10),
+          Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
           const Spacer(),
-          Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          if (value != null) value,
         ]),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         ...children,
       ]),
     );
   }
 
+  Widget _bigValue(String v, List<Color> g) => GradientText(v,
+      colors: g, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800));
+
   Widget _legend(List<(String, String, Color)> items) => Wrap(
-        spacing: 12,
-        runSpacing: 4,
+        spacing: 14,
+        runSpacing: 6,
         children: [
           for (final i in items)
             Row(mainAxisSize: MainAxisSize.min, children: [
-              Container(width: 8, height: 8, decoration: BoxDecoration(color: i.$3, borderRadius: BorderRadius.circular(2))),
-              const SizedBox(width: 4),
+              Container(
+                width: 9,
+                height: 9,
+                decoration: BoxDecoration(
+                  color: i.$3,
+                  borderRadius: BorderRadius.circular(3),
+                  boxShadow: [BoxShadow(color: i.$3.withValues(alpha: 0.6), blurRadius: 5)],
+                ),
+              ),
+              const SizedBox(width: 5),
               Text('${i.$1} ', style: const TextStyle(fontSize: 11, color: PX.muted)),
-              Text(i.$2, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+              Text(i.$2, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
             ]),
         ],
       );
 
   Widget _cpuCard(MonitorService m) => _card(
         title: 'CPU',
-        value: '${m.cpu.toStringAsFixed(1)}%',
+        icon: Icons.memory_rounded,
+        colors: PX.gCpu,
+        value: _bigValue('${m.cpu.toStringAsFixed(1)}%', PX.gCpu),
         children: [
-          LiveChart(series: [Series(m.cpuHist.data, PX.accent)], maxY: 100, height: 80, topLabel: (_) => '100%'),
-          const SizedBox(height: 8),
+          LiveChart(series: [Series(m.cpuHist.data, PX.gCpu)], maxY: 100, height: 96, topLabel: (_) => '100%'),
+          const SizedBox(height: 10),
           _legend([
             ('user', '${m.cpuUser.toStringAsFixed(1)}%', PX.accent),
             ('system', '${m.cpuSystem.toStringAsFixed(1)}%', PX.accent2),
-            ('io wait', '${m.cpuIowait.toStringAsFixed(1)}%', PX.blue),
-            ('steal', '${m.steal.toStringAsFixed(1)}%', PX.red),
+            ('io wait', '${m.cpuIowait.toStringAsFixed(1)}%', PX.cyan),
+            ('steal', '${m.steal.toStringAsFixed(1)}%', PX.pink),
           ]),
           if (m.coreUsage.length > 1) ...[
-            const SizedBox(height: 10),
-            Wrap(spacing: 8, runSpacing: 6, children: [
-              for (var i = 0; i < m.coreUsage.length; i++)
-                SizedBox(
-                  width: 70,
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('core $i  ${m.coreUsage[i].toStringAsFixed(0)}%',
-                        style: const TextStyle(fontSize: 10, color: PX.muted)),
-                    const SizedBox(height: 2),
-                    UsageBar(percent: m.coreUsage[i], color: PX.accent),
-                  ]),
-                ),
-            ]),
+            const SizedBox(height: 12),
+            _coreBars(m.coreUsage),
           ],
           if (m.steal >= 5)
             const Padding(
@@ -269,59 +305,129 @@ class _MonitorPanelState extends State<MonitorPanel> {
         ],
       );
 
+  /// Equalizer-style bars, one per core.
+  Widget _coreBars(List<double> cores) {
+    return SizedBox(
+      height: 58,
+      child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+        for (var i = 0; i < cores.length; i++)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(end: (cores[i] / 100).clamp(0.03, 1.0)),
+                      duration: const Duration(milliseconds: 500),
+                      builder: (context, f, _) => FractionallySizedBox(
+                        heightFactor: f,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(4),
+                            gradient: const LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                              colors: PX.gCpu,
+                            ),
+                            boxShadow: [BoxShadow(color: PX.accent.withValues(alpha: 0.35), blurRadius: 6)],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(cores.length > 16 ? '$i' : 'c$i  ${cores[i].toStringAsFixed(0)}%',
+                    maxLines: 1,
+                    overflow: TextOverflow.clip,
+                    style: const TextStyle(fontSize: 9, color: PX.muted)),
+              ]),
+            ),
+          ),
+      ]),
+    );
+  }
+
   Widget _memCard(MonitorService m) {
     final t = m.memTotal == 0 ? 1 : m.memTotal;
     final room = t - m.memUsed < 0 ? 0 : t - m.memUsed;
     final cache = m.memCache.clamp(0, room).toInt();
     return _card(
       title: 'Memory',
-      value: '${fmtBytes(m.memUsed)} / ${fmtBytes(m.memTotal)}',
-      color: PX.blue,
+      icon: Icons.storage_rounded,
+      colors: PX.gMem,
+      value: _bigValue('${fmtBytes(m.memUsed)} / ${fmtBytes(m.memTotal)}', PX.gMem),
       children: [
-        LiveChart(series: [Series(m.memHist.data, PX.blue)], maxY: 100, height: 70, topLabel: (_) => '100%'),
+        LiveChart(series: [Series(m.memHist.data, PX.gMem)], maxY: 100, height: 80, topLabel: (_) => '100%'),
+        const SizedBox(height: 10),
+        StackedBar(parts: [(m.memUsed / t, PX.neonBlue), (cache / t, PX.cyan.withValues(alpha: 0.45))]),
         const SizedBox(height: 8),
-        StackedBar(parts: [(m.memUsed / t, PX.blue), (cache / t, PX.blue.withValues(alpha: 0.4))]),
-        const SizedBox(height: 6),
         _legend([
-          ('used', fmtBytes(m.memUsed), PX.blue),
-          ('cache', fmtBytes(cache), PX.blue.withValues(alpha: 0.4)),
-          ('free', fmtBytes(m.memFree), PX.surface2),
+          ('used', fmtBytes(m.memUsed), PX.neonBlue),
+          ('cache', fmtBytes(cache), PX.cyan.withValues(alpha: 0.6)),
+          ('free', fmtBytes(m.memFree), Colors.white24),
         ]),
         if (m.swapTotal > 0) ...[
-          const SizedBox(height: 8),
-          Text('Swap ${fmtBytes(m.swapUsed)} of ${fmtBytes(m.swapTotal)}',
-              style: const TextStyle(fontSize: 11, color: PX.muted)),
-          const SizedBox(height: 3),
-          UsageBar(percent: m.swapPerc, color: PX.purple),
+          const SizedBox(height: 12),
+          Row(children: [
+            const Text('Swap', style: TextStyle(fontSize: 11.5, color: PX.muted)),
+            const Spacer(),
+            Text('${fmtBytes(m.swapUsed)} / ${fmtBytes(m.swapTotal)}',
+                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+          ]),
+          const SizedBox(height: 5),
+          GradientBar(percent: m.swapPerc, colors: PX.gSwap),
         ],
       ],
     );
   }
 
+  Widget _rate(IconData icon, String label, String v, List<Color> g) => Expanded(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: g.first.withValues(alpha: 0.08),
+            border: Border.all(color: g.first.withValues(alpha: 0.3)),
+          ),
+          child: Row(children: [
+            Icon(icon, size: 18, color: g.first),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(label, style: const TextStyle(fontSize: 10, color: PX.muted)),
+                GradientText(v, colors: g, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800)),
+              ]),
+            ),
+          ]),
+        ),
+      );
+
   Widget _netCard(MonitorService m) => _card(
         title: 'Network',
-        color: PX.green,
+        icon: Icons.wifi_rounded,
+        colors: PX.gRx,
         children: [
           Row(children: [
-            const Icon(Icons.south, size: 15, color: PX.green),
-            Text(' ${fmtRate(m.rxRate)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-            const SizedBox(width: 16),
-            const Icon(Icons.north, size: 15, color: PX.purple),
-            Text(' ${fmtRate(m.txRate)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+            _rate(Icons.south_rounded, 'Download', fmtRate(m.rxRate), PX.gRx),
+            const SizedBox(width: 8),
+            _rate(Icons.north_rounded, 'Upload', fmtRate(m.txRate), PX.gTx),
           ]),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           LiveChart(
-            series: [Series(m.rxHist.data, PX.green), Series(m.txHist.data, PX.purple)],
-            height: 80,
+            series: [Series(m.rxHist.data, PX.gRx), Series(m.txHist.data, PX.gTx)],
+            height: 96,
             topLabel: (t) => fmtRate(t),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           _legend([
-            ('received since boot', fmtBytes(m.rxTotal), PX.green),
-            ('sent', fmtBytes(m.txTotal), PX.purple),
+            ('received since boot', fmtBytes(m.rxTotal), PX.mint),
+            ('sent', fmtBytes(m.txTotal), PX.pink),
           ]),
           if (m.ifaceRates.length > 1) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             for (final e in m.ifaceRates.entries)
               Text('${e.key}   ↓${fmtRate(e.value.$1)}   ↑${fmtRate(e.value.$2)}',
                   style: const TextStyle(fontSize: 11, color: PX.muted)),
@@ -331,58 +437,57 @@ class _MonitorPanelState extends State<MonitorPanel> {
 
   Widget _diskCard(MonitorService m) => _card(
         title: 'Disks',
-        color: PX.yellow,
+        icon: Icons.save_rounded,
+        colors: PX.gDisk,
         children: [
           Row(children: [
-            const Text('read ', style: TextStyle(fontSize: 11, color: PX.muted)),
-            Text(fmtRate(m.diskRead), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
-            const SizedBox(width: 14),
-            const Text('write ', style: TextStyle(fontSize: 11, color: PX.muted)),
-            Text(fmtRate(m.diskWrite), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+            _rate(Icons.download_rounded, 'Read', fmtRate(m.diskRead), PX.gDisk),
+            const SizedBox(width: 8),
+            _rate(Icons.upload_rounded, 'Write', fmtRate(m.diskWrite), const [PX.accent, PX.pink]),
           ]),
-          const SizedBox(height: 6),
+          const SizedBox(height: 12),
           LiveChart(
-            series: [Series(m.readHist.data, PX.yellow), Series(m.writeHist.data, PX.red)],
-            height: 50,
+            series: [Series(m.readHist.data, PX.gDisk), Series(m.writeHist.data, const [PX.accent, PX.pink])],
+            height: 64,
             topLabel: (t) => fmtRate(t),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           for (final d in m.disks)
             Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(bottom: 10),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
+                  const Icon(Icons.folder_rounded, size: 14, color: PX.yellow),
+                  const SizedBox(width: 5),
                   Expanded(
                     child: Text(d.mount,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                   ),
-                  Text('${fmtBytes(d.used)} / ${fmtBytes(d.total)}  ${d.perc.toStringAsFixed(0)}%',
+                  Text('${fmtBytes(d.used)} / ${fmtBytes(d.total)}',
                       style: const TextStyle(fontSize: 11, color: PX.muted)),
+                  const SizedBox(width: 8),
+                  Text('${d.perc.toStringAsFixed(0)}%',
+                      style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                          color: d.perc > 90 ? PX.red : PX.yellow)),
                 ]),
-                const SizedBox(height: 3),
-                UsageBar(percent: d.perc, color: d.perc > 90 ? PX.red : PX.yellow),
+                const SizedBox(height: 5),
+                GradientBar(
+                    percent: d.perc,
+                    colors: d.perc > 90 ? const [PX.accent, PX.red] : PX.gDisk,
+                    height: 7),
               ]),
             ),
         ],
       );
 
-  Widget _segments() {
-    return SegmentedButton<int>(
-      showSelectedIcon: false,
-      style: SegmentedButton.styleFrom(
-        visualDensity: VisualDensity.compact,
-        textStyle: const TextStyle(fontSize: 12),
-      ),
-      segments: const [
-        ButtonSegment(value: 0, label: Text('Processes'), icon: Icon(Icons.apps, size: 16)),
-        ButtonSegment(value: 1, label: Text('Docker'), icon: Icon(Icons.inventory_2_outlined, size: 16)),
-        ButtonSegment(value: 2, label: Text('Net / app'), icon: Icon(Icons.swap_vert, size: 16)),
-      ],
-      selected: {_view},
-      onSelectionChanged: (s) => _setView(s.first),
-    );
-  }
+  BoxDecoration _box() => BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: PX.neonPurple.withValues(alpha: 0.25)),
+      );
 
   // ------------------------------------------------------------ processes
 
@@ -424,21 +529,48 @@ class _MonitorPanelState extends State<MonitorPanel> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
-            color: on ? PX.accent.withValues(alpha: 0.18) : PX.surface2,
+            gradient: on ? const LinearGradient(colors: [PX.violet, PX.neonPurple]) : null,
+            color: on ? null : Colors.white.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: on ? PX.accent : Colors.transparent),
+            boxShadow: on ? [BoxShadow(color: PX.neonPurple.withValues(alpha: 0.4), blurRadius: 8, spreadRadius: -2)] : null,
           ),
-          child: Text(label, style: TextStyle(fontSize: 11.5, color: on ? PX.accent2 : PX.muted)),
+          child: Text(label,
+              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: on ? Colors.white : PX.muted)),
         ),
       );
+
+  static const _avatarColors = [
+    PX.gCpu, PX.gMem, PX.gSwap, PX.gRx, PX.gTx, PX.gDisk, [PX.cyan, PX.neonBlue], [PX.pink, PX.accent],
+  ];
+
+  Widget _avatar(String name) {
+    final g = _avatarColors[name.codeUnits.fold<int>(0, (a, b) => a + b) % _avatarColors.length];
+    return Container(
+      width: 30,
+      height: 30,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(9),
+        gradient: LinearGradient(
+            colors: [g.first.withValues(alpha: 0.85), g.last.withValues(alpha: 0.85)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight),
+      ),
+      child: Text(name.isEmpty ? '?' : name.substring(0, 1).toUpperCase(),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white)),
+    );
+  }
 
   Widget _procRow(ProcInfo p, MonitorService m) {
     final memPerc = m.memTotal == 0 ? 0.0 : p.rss / m.memTotal * 100;
     return InkWell(
       onTap: _grouped ? null : () => _procMenu(p),
+      borderRadius: BorderRadius.circular(10),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 5),
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
         child: Row(children: [
+          _avatar(p.name),
+          const SizedBox(width: 10),
           Expanded(
             flex: 5,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -453,7 +585,7 @@ class _MonitorPanelState extends State<MonitorPanel> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
               Text('${p.cpu.toStringAsFixed(1)}%', style: const TextStyle(fontSize: 12)),
               const SizedBox(height: 3),
-              UsageBar(percent: p.cpu / m.cores, color: PX.accent),
+              GradientBar(percent: p.cpu / m.cores, colors: PX.gCpu),
             ]),
           ),
           const SizedBox(width: 12),
@@ -462,7 +594,7 @@ class _MonitorPanelState extends State<MonitorPanel> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
               Text(fmtBytes(p.rss), style: const TextStyle(fontSize: 12)),
               const SizedBox(height: 3),
-              UsageBar(percent: memPerc, color: PX.blue),
+              GradientBar(percent: memPerc, colors: PX.gMem),
             ]),
           ),
         ]),
@@ -530,7 +662,7 @@ class _MonitorPanelState extends State<MonitorPanel> {
               Text('CPU ${c.cpu}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
             ]),
             const SizedBox(height: 6),
-            UsageBar(percent: c.cpuValue, color: PX.accent),
+            GradientBar(percent: c.cpuValue, colors: PX.gCpu),
             const SizedBox(height: 6),
             Text('RAM ${c.mem} (${c.memPerc})', style: const TextStyle(fontSize: 11.5, color: PX.muted)),
             Text('Net ${c.net}    Disk ${c.block}', style: const TextStyle(fontSize: 11.5, color: PX.muted)),
