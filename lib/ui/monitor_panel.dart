@@ -205,12 +205,12 @@ class _MonitorPanelState extends State<MonitorPanel> {
   Widget _gauges(MonitorService m, double width) {
     final root = m.rootDisk;
     final tiles = <Widget Function()>[
-      () => _gaugeTile(m.cpu, 'CPU', '${m.cores} cores', PX.gCpu),
-      () => _gaugeTile(m.memPerc, 'RAM', '${fmtBytes(m.memUsed, digits: 1)} / ${fmtBytes(m.memTotal, digits: 0)}', PX.gMem),
+      () => _gaugeTile(m.cpu, 'CPU', '${m.cores} cores', PX.gCpu, PX.ringCpu),
+      () => _gaugeTile(m.memPerc, 'RAM', '${fmtBytes(m.memUsed, digits: 1)} / ${fmtBytes(m.memTotal, digits: 0)}', PX.gMem, PX.ringMem),
       if (m.swapTotal > 0)
-        () => _gaugeTile(m.swapPerc, 'Swap', '${fmtBytes(m.swapUsed, digits: 0)} / ${fmtBytes(m.swapTotal, digits: 0)}', PX.gSwap),
+        () => _gaugeTile(m.swapPerc, 'Swap', '${fmtBytes(m.swapUsed, digits: 0)} / ${fmtBytes(m.swapTotal, digits: 0)}', PX.gSwap, PX.ringSwap),
       if (root != null)
-        () => _gaugeTile(root.perc, 'Disk', '${fmtBytes(root.used, digits: 0)} / ${fmtBytes(root.total, digits: 0)}', PX.gDisk),
+        () => _gaugeTile(root.perc, 'Disk', '${fmtBytes(root.used, digits: 0)} / ${fmtBytes(root.total, digits: 0)}', PX.gDisk, PX.ringDisk),
     ];
     final cols = width >= 760 || tiles.length == 3 ? tiles.length : 2;
     final gap = 10.0;
@@ -226,11 +226,11 @@ class _MonitorPanelState extends State<MonitorPanel> {
 
   double _ringSize = 84;
 
-  Widget _gaugeTile(double v, String label, String sub, List<Color> g) => NeonCard(
+  Widget _gaugeTile(double v, String label, String sub, List<Color> g, List<Color> ring) => NeonCard(
         colors: g,
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-        child: Center(child: RingGauge(percent: v, label: label, sub: sub, colors: g, size: _ringSize)),
+        child: Center(child: RingGauge(percent: v, label: label, sub: sub, colors: ring, size: _ringSize)),
       );
 
   Widget _card({

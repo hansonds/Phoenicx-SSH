@@ -36,6 +36,12 @@ class PX {
   static const gDisk = [Color(0xFFD4A03A), Color(0xFFE8C77A)];
   static const gBrand = [Color(0xFFE8743B), Color(0xFFF2A65A)];
 
+  // Gauge rings keep the vivid look.
+  static const ringCpu = [Color(0xFFFF3D2E), Color(0xFFFF6A2B), Color(0xFFFFB347)];
+  static const ringMem = [Color(0xFF3B82F6), Color(0xFF22D3EE)];
+  static const ringSwap = [Color(0xFF7C3AED), Color(0xFFEC4899)];
+  static const ringDisk = [Color(0xFFF59E0B), Color(0xFFFDE047)];
+
   // Network keeps its original colours.
   static const netGreen = Color(0xFF34D399);
   static const netCyan = Color(0xFF22D3EE);

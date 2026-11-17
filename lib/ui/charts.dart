@@ -228,6 +228,17 @@ class _RingPainter extends CustomPainter {
       -pi / 2,
       3 * pi / 2,
     );
+    // Soft halo around the arc.
+    canvas.drawArc(
+        rect,
+        -pi / 2,
+        sweep,
+        false,
+        Paint()
+          ..color = colors.last.withValues(alpha: 0.2)
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = stroke + 7);
     canvas.drawArc(
         rect,
         -pi / 2,
