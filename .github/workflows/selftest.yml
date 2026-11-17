@@ -262,9 +262,13 @@ jobs:
           path: shots/
 
   android:
-    name: Android emulator test
+    name: Android emulator test (impeller ${{ matrix.impeller }})
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        impeller: ["on", "off"]
     steps:
       - uses: actions/checkout@v4
 
@@ -295,6 +299,10 @@ jobs:
           cp -r branding/android/res/* android/app/src/main/res/
           KDIR=android/app/src/main/kotlin/com/hanson/phoenicx_ssh
           mkdir -p $KDIR && rm -f $KDIR/*.kt && cp branding/android/kotlin/*.kt $KDIR/
+          if [ "${{ matrix.impeller }}" = "off" ]; then
+            sed -i 's#<meta-data#<meta-data android:name="io.flutter.embedding.android.EnableImpeller" android:value="false" />\n        <meta-data#' android/app/src/main/AndroidManifest.xml
+            grep -n EnableImpeller android/app/src/main/AndroidManifest.xml
+          fi
           flutter build apk --release --target-platform android-x64 \
             --dart-define=SELFTEST="$USER:phx123@10.0.2.2:2222" --dart-define=SELFTEST_MONITOR=75
           cp build/app/outputs/flutter-apk/app-release.apk app.apk

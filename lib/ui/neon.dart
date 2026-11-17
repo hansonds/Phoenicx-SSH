@@ -82,7 +82,7 @@ class IconBadge extends StatelessWidget {
   }
 }
 
-/// Text painted with a gradient.
+/// Text painted with a gradient (uses a paint shader - no extra layers).
 class GradientText extends StatelessWidget {
   final String text;
   final List<Color> colors;
@@ -91,10 +91,15 @@ class GradientText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ShaderMask(
-      blendMode: BlendMode.srcIn,
-      shaderCallback: (r) => LinearGradient(colors: colors).createShader(r),
-      child: Text(text, style: style),
+    final size = (style.fontSize ?? 14);
+    final w = text.length * size * 0.62;
+    return Text(
+      text,
+      overflow: TextOverflow.ellipsis,
+      style: style.copyWith(
+        foreground: Paint()
+          ..shader = LinearGradient(colors: colors).createShader(Rect.fromLTWH(0, 0, w, size * 1.3)),
+      ),
     );
   }
 }
