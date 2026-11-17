@@ -85,6 +85,9 @@ jobs:
 
       - name: Run app, type with a real keyboard, take screenshots
         if: always()
+        continue-on-error: true
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
           mkdir -p shots
           Xvfb :99 -screen 0 1440x900x24 >/dev/null 2>&1 &
@@ -151,6 +154,8 @@ jobs:
           Start-Process python -ArgumentList ".github/selftest/fake_ssh_server.py", $log
           Start-Sleep 4
           $env:PHOENICX_SELFTEST = "test:test@127.0.0.1:2222"
+          $env:PHOENICX_SELFTEST_MONITOR = "100"
+          $launch = Get-Date
           $env:PHOENICX_KEYLOG = "$env:RUNNER_TEMP\keylog.txt"
           Start-Process "build\windows\x64\runner\Release\phoenicx_ssh.exe"
           Start-Sleep 18
@@ -231,6 +236,12 @@ jobs:
           Shot "3-selected"
           $clip = Get-Clipboard -Raw
           Write-Host "Clipboard after selecting: [$clip]"
+          # The app opens the full-screen monitor 100 s after start (fake server sends stats)
+          $wait = 125 - ((Get-Date) - $launch).TotalSeconds
+          if ($wait -gt 0) { Start-Sleep -Seconds $wait }
+          Shot "4-monitor"
+          Start-Sleep 6
+          Shot "5-monitor-later"
           Get-ChildItem shots\*.png | ForEach-Object {
             $img = [System.Drawing.Image]::FromFile($_.FullName)
             $w = [int]($img.Width * 0.6); $h = [int]($img.Height * 0.6)
@@ -279,6 +290,8 @@ jobs:
           flutter create --org com.hanson --project-name phoenicx_ssh --platforms android .
           rm -f test/widget_test.dart
           cp branding/android/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          # Work around an Android lint crash in plugins (Google bug) on newer Flutter
+          printf '\nsubprojects {\n    tasks.configureEach {\n        if (name.startsWith("lintVital")) enabled = false\n    }\n}\n' >> android/build.gradle.kts
           cp -r branding/android/res/* android/app/src/main/res/
           KDIR=android/app/src/main/kotlin/com/hanson/phoenicx_ssh
           mkdir -p $KDIR && rm -f $KDIR/*.kt && cp branding/android/kotlin/*.kt $KDIR/

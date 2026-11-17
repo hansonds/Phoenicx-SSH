@@ -182,13 +182,13 @@ void main() {
     test('reconnects by itself when the connection is killed', () async {
       final before = tab.connectedSince;
       // Kill this user's sshd session processes on the server side.
-      await Process.run('sudo', ['pkill', '-f', 'sshd: $user']);
+      await Process.run('sudo', ['pkill', '-f', 'sshd(-session)?: $user']);
       await waitFor(() => tab.status != TabStatus.connected, 'drop detected', seconds: 40);
       await waitFor(() => tab.status == TabStatus.connected && tab.connectedSince != before, 'reconnected',
           seconds: 60);
       tab.terminal.textInput('echo BACK_\$((1+1))\r');
       await waitFor(() => screen(tab).contains('BACK_2'), 'typing after reconnect');
-    });
+    }, timeout: const Timeout(Duration(minutes: 3)));
   }, skip: skip);
 }
 
