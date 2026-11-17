@@ -191,7 +191,23 @@ jobs:
           M=$(find build/app -path "*merged_manifest*release*" -name AndroidManifest.xml | head -1)
           echo "Manifest: $M"; grep -o 'android:\(minSdkVersion\|targetSdkVersion\|versionCode\|versionName\)="[^"]*"' "$M" || true
           grep -o 'android:name="android.permission[^"]*"' "$M" || true
-          mkdir -p out && cp build/app/outputs/bundle/release/app-release.aab "out/PhoenicxSSH-$V-play-UNSIGNED.aab"
+          mkdir -p out && cp build/app/outputs/bundle/release/app-release.aab out/app.aab
+      - name: Sign with the Play upload key (if secrets are set)
+        env:
+          KEY_B64: ${{ secrets.PLAY_UPLOAD_KEY_BASE64 }}
+          KEY_PASS: ${{ secrets.PLAY_UPLOAD_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEY_B64" ] || [ -z "$KEY_PASS" ]; then
+            echo "::warning::PLAY_UPLOAD_KEY_BASE64 / PLAY_UPLOAD_KEY_PASSWORD not set - bundle left UNSIGNED."
+            mv out/app.aab "out/PhoenicxSSH-$V-play-UNSIGNED.aab"
+            exit 0
+          fi
+          echo "$KEY_B64" | tr -d ' \r\n' | base64 -d > upload.p12
+          jarsigner -keystore upload.p12 -storetype PKCS12 -storepass:env KEY_PASS -keypass:env KEY_PASS \
+            -digestalg SHA-256 -sigalg SHA256withRSA out/app.aab upload
+          jarsigner -verify out/app.aab | tail -1
+          rm -f upload.p12
+          mv out/app.aab "out/PhoenicxSSH-$V-play.aab"
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: play-v${{ env.V }}
