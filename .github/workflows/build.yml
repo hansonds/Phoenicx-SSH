@@ -188,7 +188,7 @@ jobs:
         run: |
           flutter pub get
           flutter build appbundle --release --build-name "$V" --build-number "$((100 + ${{ github.run_number }}))" --dart-define=APP_VERSION="$V"
-          M=$(find build -path "*merged_manifest*release*" -name AndroidManifest.xml | head -1)
+          M=$(find build/app -path "*merged_manifest*release*" -name AndroidManifest.xml | head -1)
           echo "Manifest: $M"; grep -o 'android:\(minSdkVersion\|targetSdkVersion\|versionCode\|versionName\)="[^"]*"' "$M" || true
           grep -o 'android:name="android.permission[^"]*"' "$M" || true
           mkdir -p out && cp build/app/outputs/bundle/release/app-release.aab "out/PhoenicxSSH-$V-play-UNSIGNED.aab"
