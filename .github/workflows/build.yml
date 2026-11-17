@@ -7,6 +7,10 @@ on:
         description: "Version number (e.g. 1.0.0)"
         required: true
         default: "1.0.0"
+      play:
+        description: "Also build the Play Store bundle (.aab) into a draft release"
+        type: boolean
+        default: false
   push:
     branches: [main]
     tags:
@@ -154,3 +158,43 @@ jobs:
             - Samsung / modern Android phone: `PhoenicxSSH-${{ env.V }}-arm64.apk`
             - Not sure: `PhoenicxSSH-${{ env.V }}-universal.apk` (bigger, works on every Android device)
             - Windows: unzip `PhoenicxSSH-${{ env.V }}-Windows-x64-portable.zip` and run `PhoenicxSSH.exe`
+
+  playbundle:
+    name: Play Store bundle (.aab)
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.play == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Version
+        run: echo "V=${APP_VERSION#v}" >> $GITHUB_ENV
+      - name: Create Android project files
+        run: |
+          flutter create --org com.hanson --project-name phoenicx_ssh --platforms android .
+          rm -rf test
+          cp branding/android/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          printf '\nsubprojects {\n    tasks.configureEach {\n        if (name.startsWith("lintVital")) enabled = false\n    }\n}\n' >> android/build.gradle.kts
+          cp -r branding/android/res/* android/app/src/main/res/
+          KDIR=android/app/src/main/kotlin/com/hanson/phoenicx_ssh
+          mkdir -p $KDIR && rm -f $KDIR/*.kt && cp branding/android/kotlin/*.kt $KDIR/
+      - name: Build app bundle
+        run: |
+          flutter pub get
+          flutter build appbundle --release --build-name "$V" --build-number "$((100 + ${{ github.run_number }}))" --dart-define=APP_VERSION="$V"
+          M=$(find build -path "*merged_manifest*release*" -name AndroidManifest.xml | head -1)
+          echo "Manifest: $M"; grep -o 'android:\(minSdkVersion\|targetSdkVersion\|versionCode\|versionName\)="[^"]*"' "$M" || true
+          grep -o 'android:name="android.permission[^"]*"' "$M" || true
+          mkdir -p out && cp build/app/outputs/bundle/release/app-release.aab "out/PhoenicxSSH-$V-play-UNSIGNED.aab"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: play-v${{ env.V }}
+          name: Play bundle v${{ env.V }} (draft, internal)
+          draft: true
+          files: out/*.aab

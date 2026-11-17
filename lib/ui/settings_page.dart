@@ -9,6 +9,7 @@ import '../services/store.dart';
 import '../theme.dart';
 
 const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: 'dev');
+const privacyUrl = 'https://github.com/hansonds/Phoenicx-SSH/blob/main/PRIVACY.md';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -125,7 +126,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ListTile(
                   title: const Text('Allow running in background'),
                   subtitle: const Text(
-                    'Recommended on Samsung: stops battery saver from closing your sessions.',
+                    'Recommended on Samsung: in the list, choose "All apps", find Phoenicx SSH and set it to "Don\'t optimise".',
                     style: TextStyle(color: PX.muted, fontSize: 12),
                   ),
                   trailing: const Icon(Icons.battery_saver_outlined),
@@ -187,6 +188,21 @@ class _SettingsPageState extends State<SettingsPage> {
                 leading: const Icon(Icons.language, color: PX.accent),
                 title: const Text('phoenicx.org'),
                 onTap: () => launchUrl(Uri.parse('https://phoenicx.org'), mode: LaunchMode.externalApplication),
+              ),
+              ListTile(
+                leading: const Icon(Icons.privacy_tip_outlined, color: PX.accent),
+                title: const Text('Privacy policy'),
+                onTap: () => launchUrl(Uri.parse(privacyUrl), mode: LaunchMode.externalApplication),
+              ),
+              ListTile(
+                leading: const Icon(Icons.description_outlined, color: PX.accent),
+                title: const Text('Open-source licences'),
+                onTap: () => showLicensePage(
+                  context: context,
+                  applicationName: 'Phoenicx SSH',
+                  applicationVersion: appVersion,
+                  applicationLegalese: '© Hanson · phoenicx.org',
+                ),
               ),
             ],
           ),
