@@ -237,11 +237,12 @@ class _MonitorPanelState extends State<MonitorPanel> {
     required String title,
     required IconData icon,
     required List<Color> colors,
+    List<Color>? border,
     Widget? value,
     required List<Widget> children,
   }) {
     return NeonCard(
-      colors: colors,
+      colors: border ?? colors,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           IconBadge(icon, colors: colors, size: 30),
@@ -412,6 +413,8 @@ class _MonitorPanelState extends State<MonitorPanel> {
         title: 'Network',
         icon: Icons.wifi_rounded,
         colors: PX.gRx,
+        // Muted steel-teal frame; the chart keeps its bright colours.
+        border: const [Color(0xFF4F7F92), Color(0xFF4F7F92)],
         children: [
           Row(children: [
             _rate(Icons.south_rounded, 'Download', fmtRate(m.rxRate), PX.gRx),
