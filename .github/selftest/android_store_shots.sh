@@ -10,7 +10,8 @@ TB=124   # toolbar row (per mille of height)
 
 # 1) Terminal with real output (the monitor is open from the earlier test: switch back)
 tap 831 $TB 2
-tap 500 450 2
+tap 500 700 1      # clears the selection left by the earlier test
+tap 500 450 2      # focus the terminal (opens the keyboard)
 adb shell "input text 'clear'"; adb shell input keyevent 66; sleep 1
 adb shell "input text 'uptime;%sfree%s-h;%sdf%s-h%s/;%sdocker%sps%s--format%s\"{{.Names}}:%s{{.Status}}\"'"
 adb shell input keyevent 66; sleep 3
@@ -25,8 +26,7 @@ adb shell input swipe $((W/2)) $((H*80/100)) $((W/2)) $((H*22/100)) 700; sleep 2
 adb shell input swipe $((W/2)) $((H*80/100)) $((W/2)) $((H*40/100)) 700; sleep 2
 shot s4-network
 # 4) Processes list
-adb shell input swipe $((W/2)) $((H*85/100)) $((W/2)) $((H*15/100)) 700; sleep 1
-adb shell input swipe $((W/2)) $((H*85/100)) $((W/2)) $((H*15/100)) 700; sleep 2
+adb shell input swipe $((W/2)) $((H*85/100)) $((W/2)) $((H*25/100)) 900; sleep 2
 shot s5-processes
 # 5) Commands panel
 tap 831 $TB 2
