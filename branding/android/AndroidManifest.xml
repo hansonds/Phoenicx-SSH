@@ -42,6 +42,11 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Use Flutter's mature OpenGL renderer: the glowing monitor UI
+             crashed the Impeller renderer on some (emulated) GPUs. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
     </application>
 
     <queries>
