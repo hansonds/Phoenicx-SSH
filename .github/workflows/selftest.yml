@@ -290,6 +290,9 @@ jobs:
           echo "$USER:phx123" | sudo chpasswd
           sudo mkdir -p /run/sshd && sudo ssh-keygen -A
           sudo /usr/sbin/sshd -p 2222 -o StrictModes=no -o PasswordAuthentication=yes -o KbdInteractiveAuthentication=yes
+          # Make the store screenshots look like a real server
+          sudo hostnamectl set-hostname oracle-mumbai || sudo hostname oracle-mumbai
+          for n in jellyfin caddy movie_bot wireguard; do docker run -d --name $n nginx:alpine >/dev/null; done
 
       - name: Build test APK
         run: |
@@ -302,7 +305,8 @@ jobs:
           KDIR=android/app/src/main/kotlin/com/hanson/phoenicx_ssh
           mkdir -p $KDIR && rm -f $KDIR/*.kt && cp branding/android/kotlin/*.kt $KDIR/
           flutter build apk --release --target-platform android-x64 \
-            --dart-define=SELFTEST="$USER:phx123@10.0.2.2:2222" --dart-define=SELFTEST_MONITOR=75
+            --dart-define=SELFTEST="$USER:phx123@10.0.2.2:2222" --dart-define=SELFTEST_MONITOR=75 \
+            --dart-define=SELFTEST_STORE=true
           cp build/app/outputs/flutter-apk/app-release.apk app.apk
 
       - name: Enable KVM
@@ -319,7 +323,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: bash .github/selftest/android_test.sh
+          script: bash .github/selftest/android_test.sh && bash .github/selftest/android_store_shots.sh
 
       - name: Print screenshots
         if: always()
@@ -328,5 +332,9 @@ jobs:
           for f in shots/*.png; do
             convert "$f" -resize 40% -quality 70 "${f%.png}.jpg"
             echo "@@IMG $(basename ${f%.png}) $(base64 -w 0 ${f%.png}.jpg)"
+          done
+          for f in store/*.png; do
+            convert "$f" -quality 88 "${f%.png}.jpg"
+            echo "@@STORE $(basename ${f%.png}) $(base64 -w 0 ${f%.png}.jpg)"
           done
           test -f /tmp/android_typed_ok && echo "ANDROID TYPING CONFIRMED ON SERVER"

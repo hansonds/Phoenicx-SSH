@@ -62,15 +62,29 @@ void _selfTest() {
   SshTab.hostKeyPrompt = null;
   final monitorAfter = int.tryParse(Platform.environment['PHOENICX_SELFTEST_MONITOR'] ??
       const String.fromEnvironment('SELFTEST_MONITOR'));
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    final t = Sessions.I.open(HostConfig(
-      name: 'Self test',
+  const storeShots = bool.fromEnvironment('SELFTEST_STORE');
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    if (storeShots) {
+      // Example servers so the store screenshots look like real use.
+      for (final h in [
+        HostConfig(name: 'Home Raspberry Pi', host: '192.168.1.20', username: 'pi', auth: AuthType.password, color: 2),
+        HostConfig(name: 'Hetzner backup', host: '95.217.40.12', username: 'root', color: 3, useTmux: true),
+        HostConfig(name: 'Web staging', host: '10.0.0.15', port: 2222, username: 'deploy', color: 1),
+      ]) {
+        await Store.I.upsert(h..lastUsed = 1);
+      }
+    }
+    final cfg = HostConfig(
+      name: storeShots ? 'Oracle Mumbai' : 'Self test',
       host: m.group(3)!,
       port: int.parse(m.group(4)!),
       username: m.group(1)!,
       auth: AuthType.password,
       password: m.group(2)!,
-    ));
+      color: 0,
+    );
+    if (storeShots) await Store.I.upsert(cfg..lastUsed = 2);
+    final t = Sessions.I.open(cfg);
     final commandsAfter = int.tryParse(Platform.environment['PHOENICX_SELFTEST_COMMANDS'] ?? '');
     if (commandsAfter != null) {
       Future.delayed(Duration(seconds: commandsAfter), () => commandsRequest.value++);
