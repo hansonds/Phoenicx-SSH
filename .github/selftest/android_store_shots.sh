@@ -12,13 +12,21 @@ tapdesc() {
   adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb pull /sdcard/ui.xml /tmp/ui.xml >/dev/null 2>&1
   XY=$(python3 - "$1" <<'PY'
 import re,sys
+import html
 x=open('/tmp/ui.xml',encoding='utf-8',errors='ignore').read()
+want=sys.argv[1].lower()
+nodes=[]
 for m in re.finditer(r'<node [^>]*>', x):
     n=m.group(0)
     d=re.search(r'content-desc="([^"]*)"',n); t=re.search(r' text="([^"]*)"',n)
-    if (d and d.group(1).startswith(sys.argv[1])) or (t and t.group(1).lower()==sys.argv[1].lower()):
-        b=list(map(int,re.findall(r'\d+',re.search(r'bounds="([^"]*)"',n).group(1))))
-        print((b[0]+b[2])//2,(b[1]+b[3])//2); break
+    d=html.unescape(d.group(1)).lower() if d else ''; t=html.unescape(t.group(1)).lower() if t else ''
+    b=list(map(int,re.findall(r'\d+',re.search(r'bounds="([^"]*)"',n).group(1))))
+    nodes.append((d,t,b))
+# exact text, then label starting with it, then label containing it
+for test in (lambda d,t: t==want or d==want, lambda d,t: d.startswith(want), lambda d,t: want in d or want in t):
+    hit=[b for d,t,b in nodes if test(d,t)]
+    if hit:
+        b=hit[0]; print((b[0]+b[2])//2,(b[1]+b[3])//2); break
 PY
 )
   echo "tapdesc '$1' -> $XY"
@@ -66,10 +74,10 @@ rm -rf ~/phx-test
 tapdesc "Upload files or a folder" 2
 tapdesc "Upload a folder" 5
 shot x-picker-1
-dumptexts() { adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb pull /sdcard/ui.xml /tmp/ui.xml >/dev/null 2>&1; python3 -c "import re;print('UI TEXTS:', [t for t in re.findall(r' text=\"([^\"]+)\"', open('/tmp/ui.xml',errors='ignore').read())][:40])"; }
+dumptexts() { adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb pull /sdcard/ui.xml /tmp/ui.xml >/dev/null 2>&1; python3 -c "import re;x=open('/tmp/ui.xml',errors='ignore').read();print('UI LABELS:', [l for l in re.findall(r'(?:text|content-desc)=\"([^\"]+)\"', x)][:40])"; }
 dumptexts
 # Some Android versions open in "Recent"/root: open the side menu and pick the device storage first.
-if ! grep -q 'text="Download"' /tmp/ui.xml; then
+if ! grep -qi '="Download"' /tmp/ui.xml; then
   tapdesc "Show roots" 2; dumptexts
   for r in "sdk_gphone64_x86_64" "sdk_gphone64_arm64" "Android SDK built for x86_64" "Internal storage"; do grep -q "text=\"$r\"" /tmp/ui.xml && { tapdesc "$r" 3; break; }; done
   dumptexts
