@@ -16,7 +16,7 @@ x=open('/tmp/ui.xml',encoding='utf-8',errors='ignore').read()
 for m in re.finditer(r'<node [^>]*>', x):
     n=m.group(0)
     d=re.search(r'content-desc="([^"]*)"',n); t=re.search(r' text="([^"]*)"',n)
-    if (d and d.group(1).startswith(sys.argv[1])) or (t and t.group(1)==sys.argv[1]):
+    if (d and d.group(1).startswith(sys.argv[1])) or (t and t.group(1).lower()==sys.argv[1].lower()):
         b=list(map(int,re.findall(r'\d+',re.search(r'bounds="([^"]*)"',n).group(1))))
         print((b[0]+b[2])//2,(b[1]+b[3])//2); break
 PY
@@ -57,6 +57,41 @@ shot s7-files
 tapdesc "Actions" 3
 shot s8-file-actions
 adb shell input keyevent 4; sleep 1
+# ---- Folder upload through the real Android folder picker
+adb shell mkdir -p /sdcard/Download/phx-test/sub/deeper
+adb shell "echo hello-from-android > /sdcard/Download/phx-test/a.txt"
+adb shell "dd if=/dev/urandom of=/sdcard/Download/phx-test/sub/big.bin bs=1024 count=3072 2>/dev/null"
+adb shell "echo deep > '/sdcard/Download/phx-test/sub/deeper/with space.txt'"
+rm -rf ~/phx-test
+tapdesc "Upload files or a folder" 2
+tapdesc "Upload a folder" 5
+shot x-picker-1
+dumptexts() { adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb pull /sdcard/ui.xml /tmp/ui.xml >/dev/null 2>&1; python3 -c "import re;print('UI TEXTS:', [t for t in re.findall(r' text=\"([^\"]+)\"', open('/tmp/ui.xml',errors='ignore').read())][:40])"; }
+dumptexts
+# Some Android versions open in "Recent"/root: open the side menu and pick the device storage first.
+if ! grep -q 'text="Download"' /tmp/ui.xml; then
+  tapdesc "Show roots" 2; dumptexts
+  for r in "sdk_gphone64_x86_64" "sdk_gphone64_arm64" "Android SDK built for x86_64" "Internal storage"; do grep -q "text=\"$r\"" /tmp/ui.xml && { tapdesc "$r" 3; break; }; done
+  dumptexts
+fi
+tapdesc "Download" 3
+tapdesc "phx-test" 3
+shot x-picker-2
+dumptexts
+tapdesc "Use this folder" 3
+dumptexts
+tapdesc "Allow" 12
+shot s9-folder-upload
+echo "----- server side -----"
+ls -laR ~/phx-test 2>&1 | head -30
+L=$(md5sum ~/phx-test/sub/big.bin 2>/dev/null | cut -d' ' -f1)
+R=$(adb shell md5sum /sdcard/Download/phx-test/sub/big.bin | cut -d' ' -f1)
+A=$(cat ~/phx-test/a.txt 2>/dev/null); D=$(cat "$HOME/phx-test/sub/deeper/with space.txt" 2>/dev/null)
+if [ -n "$L" ] && [ "$L" = "$R" ] && [ "$A" = "hello-from-android" ] && [ "$D" = "deep" ]; then
+  echo "FOLDER UPLOAD OK (3 MB file identical: $L)"
+else
+  echo "::error::Folder upload from Android failed (server md5=$L phone md5=$R a=$A d=$D)"; FOLDER_FAIL=1
+fi
 adb shell input keyevent 4; sleep 2
 # Narrow phone (360 dp wide) toolbar check
 adb shell wm density $((W*160/360)); sleep 4
@@ -66,3 +101,5 @@ adb shell wm density reset; sleep 4
 tap 55 75 3
 shot s1-servers
 ls -la store
+
+if [ -n "$FOLDER_FAIL" ]; then exit 1; fi
