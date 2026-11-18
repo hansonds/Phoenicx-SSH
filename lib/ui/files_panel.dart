@@ -582,7 +582,7 @@ class _FilesPanelState extends State<FilesPanel> {
               ),
             Builder(
               builder: (bc) => IconButton(
-                tooltip: 'More',
+                tooltip: 'Actions',
                 visualDensity: VisualDensity.compact,
                 onPressed: () {
                   final box = bc.findRenderObject() as RenderBox?;
