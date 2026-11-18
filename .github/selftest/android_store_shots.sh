@@ -71,7 +71,7 @@ adb shell "echo hello-from-android > /sdcard/Download/phx-test/a.txt"
 adb shell "dd if=/dev/urandom of=/sdcard/Download/phx-test/sub/big.bin bs=1024 count=3072 2>/dev/null"
 adb shell "echo deep > '/sdcard/Download/phx-test/sub/deeper/with space.txt'"
 rm -rf ~/phx-test
-tapdesc "Upload files or a folder" 2
+tapdesc "Upload" 2
 tapdesc "Upload a folder" 5
 shot x-picker-1
 dumptexts() { adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb pull /sdcard/ui.xml /tmp/ui.xml >/dev/null 2>&1; python3 -c "import re;x=open('/tmp/ui.xml',errors='ignore').read();print('UI LABELS:', [l for l in re.findall(r'(?:text|content-desc)=\"([^\"]+)\"', x)][:40])"; }
