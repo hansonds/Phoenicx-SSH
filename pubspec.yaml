@@ -1,7 +1,7 @@
 name: phoenicx_ssh
 description: Phoenicx SSH - a lightweight tabbed SSH client with live server monitoring.
 publish_to: 'none'
-version: 1.8.2+1
+version: 1.8.3+1
 
 environment:
   sdk: '>=3.4.0 <4.0.0'

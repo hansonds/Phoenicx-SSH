@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.content.pm.PackageManager
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
@@ -86,14 +87,19 @@ class KeepAliveService : Service() {
                 acquire()
             }
         }
-        if (wifiLock == null) {
-            val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-            val mode = if (Build.VERSION.SDK_INT >= 29) WifiManager.WIFI_MODE_FULL_LOW_LATENCY
-            else @Suppress("DEPRECATION") WifiManager.WIFI_MODE_FULL_HIGH_PERF
-            wifiLock = wm.createWifiLock(mode, "PhoenicxSSH::wifi").apply {
-                setReferenceCounted(false)
-                acquire()
-            }
+        // Devices without Wi-Fi (some tablets, Chromebooks, XR) have no WifiManager: skip the lock.
+        if (wifiLock == null && packageManager.hasSystemFeature(PackageManager.FEATURE_WIFI)) {
+            try {
+                val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+                if (wm != null) {
+                    val mode = if (Build.VERSION.SDK_INT >= 29) WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+                    else @Suppress("DEPRECATION") WifiManager.WIFI_MODE_FULL_HIGH_PERF
+                    wifiLock = wm.createWifiLock(mode, "PhoenicxSSH::wifi").apply {
+                        setReferenceCounted(false)
+                        acquire()
+                    }
+                }
+            } catch (_: Exception) {}
         }
     }
 

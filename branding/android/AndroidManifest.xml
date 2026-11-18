@@ -8,6 +8,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Wi-Fi is optional: the app works on mobile data / Ethernet too.
+         (ACCESS_WIFI_STATE would otherwise make Play require Wi-Fi hardware.) -->
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
+
     <application
         android:label="Phoenicx SSH"
         android:name="${applicationName}"
