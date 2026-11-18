@@ -9,7 +9,6 @@ import android.os.Build
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
-import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.Settings
