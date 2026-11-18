@@ -78,20 +78,6 @@ If Windows SmartScreen says "Windows protected your PC", click **More info → R
 4. To get a file, tap its ⬇ button. For a folder, tap ⋮ → **Download as .tar.gz**.
 5. Right-click (Windows) or long-press (Android) any item for rename, edit, permissions and delete.
 
-## Building
-
-GitHub Actions builds everything (see `.github/workflows/build.yml`). Every run makes all five files: both APKs, the signed Play bundle, the Windows installer and the portable zip.
-
-- **Every push to `main`**: the files appear under **Artifacts** at the bottom of that run's page.
-- **Actions → Build Phoenicx SSH → Run workflow** (or pushing a `v*` tag): also publishes them together as a new Release marked **Latest**, which is what the download links above point to. Leave the version box empty to use the version in `pubspec.yaml`, or type a new one such as `1.8.1`.
-
-Repository secrets used for signing:
-
-| Secret | Used for |
-|---|---|
-| `PLAY_UPLOAD_KEY_BASE64`, `PLAY_UPLOAD_KEY_PASSWORD` | Signs `PhoenicxSSH-Play.aab` for Google Play |
-| `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` | Optional: signs the APKs with your own key |
-
 ## Credits
 
 Made by **Hanson** · [phoenicx.org](https://phoenicx.org)

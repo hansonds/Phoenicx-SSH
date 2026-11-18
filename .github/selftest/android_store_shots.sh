@@ -101,6 +101,62 @@ else
   echo "::error::Folder upload from Android failed (server md5=$L phone md5=$R a=$A d=$D)"; FOLDER_FAIL=1
 fi
 adb shell input keyevent 4; sleep 2
+# ---- Store shots for file transfer: a realistic server folder
+J=~/jellyfin
+rm -rf $J; mkdir -p $J/config $J/cache $J/media
+cat > $J/docker-compose.yml <<'YML'
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./config:/config
+      - ./cache:/cache
+      - ./media:/media:ro
+    environment:
+      - TZ=Asia/Kolkata
+      - JELLYFIN_PublishedServerUrl=https://media.example.org
+
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+YML
+printf 'media.example.org {\n    reverse_proxy localhost:8096\n    encode gzip\n}\n' > $J/Caddyfile
+for i in $(seq 1 400); do echo "[2026-11-18 09:$((i%60)):00] [INF] Playback progress: user=divya item=$i"; done > $J/jellyfin.log
+printf 'import os\nprint("movie bot ready")\n' > $J/movie_bot.py
+truncate -s 900M $J/backup-2026-11.tar.gz
+adb shell mkdir -p /sdcard/Download/website/assets
+for f in index.html about.html contact.html style.css app.js; do adb shell "echo '<!-- $f -->' > /sdcard/Download/website/$f"; done
+adb shell "dd if=/dev/urandom of=/sdcard/Download/website/assets/hero.jpg bs=1024 count=900 2>/dev/null"
+adb shell "dd if=/dev/urandom of=/sdcard/Download/website/assets/logo.png bs=1024 count=40 2>/dev/null"
+tapdesc "Files" 5
+tapdesc "jellyfin" 4
+tapdesc "Upload" 2
+tapdesc "Upload a folder" 5
+dumptexts
+grep -qi '="website"' /tmp/ui.xml || tapdesc "Download" 3
+tapdesc "website" 3
+tapdesc "Use this folder" 3
+tapdesc "Allow" 8
+tapdesc "Download" 3
+sleep 2
+shot st-files
+# Open docker-compose.yml in the editor
+tapdesc "docker-compose.yml" 3
+tapdesc "Edit" 4
+adb shell input keyevent 4; sleep 2
+shot st-editor
+adb shell input keyevent 4; sleep 2
+adb shell input keyevent 4; sleep 2
+dumptexts
 # Narrow phone (360 dp wide) toolbar check
 adb shell wm density $((W*160/360)); sleep 4
 shot x-narrow-toolbar
