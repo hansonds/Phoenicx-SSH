@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'local_folder.dart';
 import 'session.dart';
 
 /// One entry in a remote folder.
@@ -43,6 +44,8 @@ class Transfer extends ChangeNotifier {
   int done = 0;
   TransferState state = TransferState.running;
   String? error;
+  String? detail; // folder uploads: "12 of 340 files · current/file.txt"
+  bool isFolder = false;
   String? savedTo; // downloads: where the file ended up
   String? localPath; // downloads on desktop: full path to open
   final _started = DateTime.now();
@@ -291,6 +294,87 @@ class FileService extends ChangeNotifier {
         try {
           await f?.close();
         } catch (_) {}
+        notifyListeners();
+      }
+    }();
+    return t;
+  }
+
+  /// True if [path] exists on the server and is a folder.
+  Future<bool> isDir(String path) async {
+    try {
+      return (await (await _client()).stat(path)).isDirectory;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Uploads a whole folder (with all sub-folders) into [remoteDir].
+  /// Shown as ONE transfer with overall progress. Existing files with the
+  /// same name are replaced; other files on the server are left alone.
+  Transfer uploadFolder(LocalFolder folder, String remoteDir) {
+    final base = join(remoteDir, folder.name);
+    final t = Transfer(name: '${folder.name}/', upload: true, remotePath: base, total: folder.totalBytes)
+      ..isFolder = true
+      ..detail = '${folder.files.length} files';
+    _add(t);
+    () async {
+      var cancelled = false;
+      SftpFileWriter? current;
+      t._cancel = () async {
+        cancelled = true;
+        current?.abort();
+      };
+      try {
+        final s = await _client();
+        Future<void> ensureDir(String p) async {
+          try {
+            await s.mkdir(p);
+          } catch (e) {
+            // Fine if it already exists.
+            try {
+              if ((await s.stat(p)).isDirectory) return;
+            } catch (_) {}
+            throw FileError.from(e, 'Could not create folder $p');
+          }
+        }
+
+        await ensureDir(base);
+        final dirs = [...folder.dirs]..sort((a, b) => '/'.allMatches(a).length.compareTo('/'.allMatches(b).length));
+        for (final d in dirs) {
+          if (cancelled) return;
+          await ensureDir(join(base, d));
+        }
+        var doneBytes = 0;
+        var n = 0;
+        for (final f in folder.files) {
+          if (cancelled) return;
+          n++;
+          t.detail = '$n of ${folder.files.length} files · ${f.rel}';
+          final remote = join(base, f.rel);
+          final sf = await s.open(remote,
+              mode: SftpFileOpenMode.create | SftpFileOpenMode.write | SftpFileOpenMode.truncate);
+          try {
+            final start = doneBytes;
+            current = sf.write(f.open(), onProgress: (b) => t._progress(start + b));
+            await current!.done;
+          } catch (e) {
+            if (cancelled) return;
+            throw FileError.from(e, 'Upload failed at ${f.rel}');
+          } finally {
+            current = null;
+            try {
+              await sf.close();
+            } catch (_) {}
+          }
+          doneBytes += f.size;
+          t._progress(doneBytes);
+        }
+        t.detail = '${folder.files.length} files';
+        t._finish(TransferState.done);
+      } catch (e) {
+        t._finish(TransferState.failed, FileError.from(e, 'Upload failed').message);
+      } finally {
         notifyListeners();
       }
     }();

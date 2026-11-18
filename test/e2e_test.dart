@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:phoenicx_ssh/models.dart';
 import 'package:phoenicx_ssh/services/backup.dart';
 import 'package:phoenicx_ssh/services/files.dart';
+import 'package:phoenicx_ssh/services/local_folder.dart';
 import 'package:phoenicx_ssh/services/keys.dart';
 import 'package:phoenicx_ssh/services/monitor.dart';
 import 'package:phoenicx_ssh/services/session.dart';
@@ -280,6 +281,52 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 600));
       await c.cancel();
       expect(c.state, TransferState.cancelled);
+
+      // Upload a whole folder: nested folders, an empty folder, a file with spaces.
+      final src = await Directory.systemTemp.createTemp('phx_up');
+      final proj = Directory('${src.path}/my project')..createSync();
+      File('${proj.path}/readme.txt').writeAsStringSync('top level');
+      Directory('${proj.path}/src/lib/deep').createSync(recursive: true);
+      File('${proj.path}/src/main.py').writeAsStringSync('print("hi")');
+      File('${proj.path}/src/lib/deep/data file.bin').writeAsBytesSync(data.sublist(0, 1024 * 1024));
+      Directory('${proj.path}/empty').createSync();
+      final lf = await LocalFolder.fromDirectory(proj);
+      expect(lf.name, 'my project');
+      expect(lf.files.length, 3);
+      expect(lf.dirs.toSet(), {'src', 'src/lib', 'src/lib/deep', 'empty'});
+      final fu = fs.uploadFolder(lf, base);
+      expect(fu.isFolder, true);
+      await waitFor(() => !fu.active, 'folder upload', seconds: 60);
+      expect(fu.state, TransferState.done, reason: fu.error);
+      expect(fu.done, lf.totalBytes);
+      expect(File('$base/my project/readme.txt').readAsStringSync(), 'top level');
+      expect(File('$base/my project/src/main.py').readAsStringSync(), 'print("hi")');
+      expect(File('$base/my project/src/lib/deep/data file.bin').readAsBytesSync(), data.sublist(0, 1024 * 1024));
+      expect(Directory('$base/my project/empty').existsSync(), true);
+      expect(await fs.isDir('$base/my project'), true);
+
+      // Upload again into the existing folder: replaces same-name files, keeps others.
+      File('$base/my project/server-only.txt').writeAsStringSync('keep me');
+      File('${proj.path}/readme.txt').writeAsStringSync('updated');
+      final fu2 = fs.uploadFolder(await LocalFolder.fromDirectory(proj), base);
+      await waitFor(() => !fu2.active, 'folder re-upload', seconds: 60);
+      expect(fu2.state, TransferState.done, reason: fu2.error);
+      expect(File('$base/my project/readme.txt').readAsStringSync(), 'updated');
+      expect(File('$base/my project/server-only.txt').readAsStringSync(), 'keep me');
+
+      // Cancel a folder upload part-way.
+      final many = Directory('${src.path}/many')..createSync();
+      for (var i = 0; i < 120; i++) {
+        File('${many.path}/f$i.bin').writeAsBytesSync(data.sublist(0, 512 * 1024));
+      }
+      final fu3 = fs.uploadFolder(await LocalFolder.fromDirectory(many), base);
+      await waitFor(() => fu3.done > 0, 'folder upload started', seconds: 30);
+      await fu3.cancel();
+      expect(fu3.state, TransferState.cancelled);
+      await Future.delayed(const Duration(milliseconds: 500));
+      final sent = Directory('$base/many').listSync().length;
+      expect(sent, lessThan(120), reason: 'cancel should stop the folder upload');
+      await src.delete(recursive: true);
 
       // Delete the whole test folder (recursive).
       final folder = (await fs.list(home)).firstWhere((e) => e.name == 'phx_files_test');

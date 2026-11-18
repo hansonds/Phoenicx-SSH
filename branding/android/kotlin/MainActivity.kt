@@ -9,6 +9,8 @@ import android.os.Build
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.net.Uri
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
@@ -17,6 +19,8 @@ import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.embedding.engine.dart.DartExecutor
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.io.InputStream
+import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
     companion object {
@@ -36,6 +40,52 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun shouldDestroyEngineWithHost(): Boolean = false
+
+    private val io = Executors.newSingleThreadExecutor()
+    private val main = Handler(Looper.getMainLooper())
+    private val readers = HashMap<Int, InputStream>()
+    private var nextHandle = 1
+
+    /** Lists a picked folder: its name, every file (relative path, uri, size) and every sub-folder. */
+    private fun listTree(tree: Uri): Map<String, Any> {
+        val resolver = applicationContext.contentResolver
+        val rootId = DocumentsContract.getTreeDocumentId(tree)
+        var name = "folder"
+        resolver.query(DocumentsContract.buildDocumentUriUsingTree(tree, rootId),
+            arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME), null, null, null)?.use {
+            if (it.moveToFirst()) name = it.getString(0) ?: name
+        }
+        val files = ArrayList<Map<String, Any>>()
+        val dirs = ArrayList<String>()
+        val stack = ArrayDeque<Pair<String, String>>() // docId, relative path
+        stack.add(rootId to "")
+        while (stack.isNotEmpty()) {
+            val (id, rel) = stack.removeLast()
+            val kids = DocumentsContract.buildChildDocumentsUriUsingTree(tree, id)
+            resolver.query(kids, arrayOf(
+                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                DocumentsContract.Document.COLUMN_MIME_TYPE,
+                DocumentsContract.Document.COLUMN_SIZE), null, null, null)?.use { c ->
+                while (c.moveToNext()) {
+                    val cid = c.getString(0)
+                    val cname = c.getString(1) ?: continue
+                    val mime = c.getString(2) ?: ""
+                    val path = if (rel.isEmpty()) cname else "$rel/$cname"
+                    if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
+                        dirs.add(path)
+                        stack.add(cid to path)
+                    } else {
+                        files.add(mapOf(
+                            "path" to path,
+                            "uri" to DocumentsContract.buildDocumentUriUsingTree(tree, cid).toString(),
+                            "size" to (if (c.isNull(3)) 0L else c.getLong(3))))
+                    }
+                }
+            }
+        }
+        return mapOf("name" to name, "files" to files, "dirs" to dirs)
+    }
 
     private fun saveToDownloads(src: File, name: String, mime: String): String {
         if (Build.VERSION.SDK_INT >= 29) {
@@ -123,7 +173,6 @@ class MainActivity : FlutterActivity() {
                             val src = call.argument<String>("path")!!
                             val name = call.argument<String>("name")!!
                             val mime = call.argument<String>("mime") ?: "application/octet-stream"
-                            val main = Handler(Looper.getMainLooper())
                             Thread {
                                 try {
                                     val shown = saveToDownloads(File(src), name, mime)
@@ -132,6 +181,59 @@ class MainActivity : FlutterActivity() {
                                     main.post { result.error("SAVE", e.message, null) }
                                 }
                             }.start()
+                        }
+                        "listTree" -> {
+                            // Everything inside a folder the user picked (SAF tree URI).
+                            val tree = Uri.parse(call.argument<String>("uri")!!)
+                            io.execute {
+                                try {
+                                    val r = listTree(tree)
+                                    main.post { result.success(r) }
+                                } catch (e: Exception) {
+                                    main.post { result.error("LIST", e.message, null) }
+                                }
+                            }
+                        }
+                        "openRead" -> {
+                            val uri = Uri.parse(call.argument<String>("uri")!!)
+                            io.execute {
+                                try {
+                                    val ins = applicationContext.contentResolver.openInputStream(uri)
+                                        ?: throw Exception("Can't open the file")
+                                    val h = nextHandle++
+                                    readers[h] = ins
+                                    main.post { result.success(h) }
+                                } catch (e: Exception) {
+                                    main.post { result.error("OPEN", e.message, null) }
+                                }
+                            }
+                        }
+                        "read" -> {
+                            val h = call.argument<Int>("h")!!
+                            val n = call.argument<Int>("n") ?: 262144
+                            io.execute {
+                                try {
+                                    val ins = readers[h] ?: throw Exception("File is closed")
+                                    val buf = ByteArray(n)
+                                    var got = 0
+                                    while (got < n) {
+                                        val r = ins.read(buf, got, n - got)
+                                        if (r < 0) break
+                                        got += r
+                                    }
+                                    val out = if (got == 0) null else if (got == n) buf else buf.copyOf(got)
+                                    main.post { result.success(out) }
+                                } catch (e: Exception) {
+                                    main.post { result.error("READ", e.message, null) }
+                                }
+                            }
+                        }
+                        "closeRead" -> {
+                            val h = call.argument<Int>("h")!!
+                            io.execute {
+                                try { readers.remove(h)?.close() } catch (_: Exception) {}
+                                main.post { result.success(null) }
+                            }
                         }
                         "background" -> {
                             moveTaskToBack(true)

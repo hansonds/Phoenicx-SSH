@@ -41,7 +41,7 @@ If Windows SmartScreen says "Windows protected your PC", click **More info → R
   - On Android, a small foreground service keeps sessions running with the screen off or the app in the background.
   - Optional **tmux mode**: programs keep running on the server, and the app re-attaches to the same screen after a reconnect.
 - **File transfer (SFTP).** Tap **Files** in any session to browse the server's folders.
-  - **Upload** files from your PC or phone (several at once). **Download** files, or a whole folder as a `.tar.gz`.
+  - **Upload** files from your PC or phone (several at once), or a **whole folder** with all its sub-folders. **Download** files, or a whole folder as a `.tar.gz`.
   - Downloads go to your **Downloads** folder (on Android: `Download/Phoenicx SSH`).
   - Progress bar with speed, cancel button, and transfers keep running when you close the panel.
   - **Edit** small text files (configs, `docker-compose.yml`, `Caddyfile`…) right in the app and save them back.
@@ -74,7 +74,7 @@ If Windows SmartScreen says "Windows protected your PC", click **More info → R
 
 1. Connect to the server.
 2. Tap **Files** in the toolbar (folder icon on phones).
-3. To send files to the server, open the folder you want and tap **Upload**.
+3. To send files to the server, open the folder you want and tap **Upload**, then choose **Upload files** or **Upload a folder**. A folder is copied with everything inside it; if it already exists on the server, files with the same name are replaced and the rest are kept.
 4. To get a file, tap its ⬇ button. For a folder, tap ⋮ → **Download as .tar.gz**.
 5. Right-click (Windows) or long-press (Android) any item for rename, edit, permissions and delete.
 

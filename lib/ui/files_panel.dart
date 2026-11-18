@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/files.dart';
+import '../services/local_folder.dart';
 import '../services/session.dart';
 import '../theme.dart';
 
@@ -180,6 +181,48 @@ class _FilesPanelState extends State<FilesPanel> {
       t.addListener(done);
     }
     if (n > 0) _snack(n == 1 ? 'Uploading ${picked.first.name}' : 'Uploading $n files');
+  }
+
+  Future<void> _uploadFolder() async {
+    final dir = _dir;
+    if (dir == null) return;
+    LocalFolder? folder;
+    try {
+      folder = await LocalFolder.pick();
+    } catch (e) {
+      _snack('Could not read that folder: $e');
+      return;
+    }
+    if (folder == null || !mounted) return;
+    if (folder.files.isEmpty && folder.dirs.isEmpty) {
+      _snack('${folder.name} is empty');
+    }
+    final exists = _items.any((e) => e.name == folder!.name);
+    if (exists) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: Text('${folder!.name} already exists'),
+          content: Text('A folder with this name is already in $dir. '
+              'Files with the same name inside it will be replaced; other files are kept.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Upload and replace')),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+    final t = fs.uploadFolder(folder, dir);
+    _snack('Uploading ${folder.name} · ${folder.files.length} files, ${fmtBytes(folder.totalBytes)}');
+    _refresh();
+    void done() {
+      if (t.active) return;
+      t.removeListener(done);
+      if (mounted && _dir == dir) _refresh();
+    }
+
+    t.addListener(done);
   }
 
   Future<void> _download(RemoteEntry e) async {
@@ -397,16 +440,43 @@ class _FilesPanelState extends State<FilesPanel> {
           const Expanded(
             child: Text('Files', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           ),
-          FilledButton.icon(
-            onPressed: _dir == null ? null : _upload,
-            style: FilledButton.styleFrom(
-              backgroundColor: PX.neonBlue,
-              foregroundColor: Colors.white,
-              visualDensity: VisualDensity.compact,
+          PopupMenuButton<String>(
+            tooltip: 'Upload files or a folder',
+            enabled: _dir != null,
+            position: PopupMenuPosition.under,
+            onSelected: (v) => v == 'folder' ? _uploadFolder() : _upload(),
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'files',
+                child: Row(children: [
+                  Icon(Icons.upload_file_rounded, size: 20, color: PX.neonBlue),
+                  SizedBox(width: 10),
+                  Text('Upload files'),
+                ]),
+              ),
+              PopupMenuItem(
+                value: 'folder',
+                child: Row(children: [
+                  Icon(Icons.drive_folder_upload_rounded, size: 20, color: PX.accent2),
+                  SizedBox(width: 10),
+                  Text('Upload a folder'),
+                ]),
+              ),
+            ],
+            child: Container(
+              height: 34,
               padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: _dir == null ? PX.cardLine : PX.neonBlue,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.upload_rounded, size: 18, color: Colors.white),
+                SizedBox(width: 6),
+                Text('Upload', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                Icon(Icons.arrow_drop_down_rounded, size: 20, color: Colors.white),
+              ]),
             ),
-            icon: const Icon(Icons.upload_rounded, size: 18),
-            label: const Text('Upload'),
           ),
           IconButton(
             tooltip: 'New folder',
@@ -645,15 +715,21 @@ class _FilesPanelState extends State<FilesPanel> {
     };
     final status = switch (t.state) {
       TransferState.running =>
-        '${(t.progress * 100).toStringAsFixed(0)}%  ·  ${fmtBytes(t.done)} of ${fmtBytes(t.total)}  ·  ${fmtBytes(t.speed)}/s',
-      TransferState.done => t.upload ? 'Uploaded to ${FileService.parent(t.remotePath)}' : 'Saved to ${t.savedTo ?? 'Downloads'}',
+        '${(t.progress * 100).toStringAsFixed(0)}%  ·  ${fmtBytes(t.done)} of ${fmtBytes(t.total)}  ·  ${fmtBytes(t.speed)}/s'
+            '${t.detail != null ? '\n${t.detail}' : ''}',
+      TransferState.done => t.isFolder
+          ? 'Uploaded ${t.detail ?? ''} to ${FileService.parent(t.remotePath)}'
+          : t.upload
+              ? 'Uploaded to ${FileService.parent(t.remotePath)}'
+              : 'Saved to ${t.savedTo ?? 'Downloads'}',
       TransferState.failed => t.error ?? 'Failed',
       TransferState.cancelled => 'Cancelled',
     };
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 4, 6, 4),
       child: Row(children: [
-        Icon(t.upload ? Icons.upload_rounded : Icons.download_rounded, size: 18, color: color),
+        Icon(t.isFolder ? Icons.drive_folder_upload_rounded : (t.upload ? Icons.upload_rounded : Icons.download_rounded),
+            size: 18, color: color),
         const SizedBox(width: 10),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
