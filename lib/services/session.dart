@@ -11,6 +11,7 @@ import 'package:xterm/xterm.dart';
 import '../models.dart';
 import 'debug_log.dart';
 import 'fast_socket.dart';
+import 'files.dart';
 import 'keepalive.dart';
 import 'keys.dart';
 import 'monitor.dart';
@@ -51,6 +52,7 @@ class SshTab extends ChangeNotifier {
   final monitor = MonitorService();
   final nethogs = NetHogsService();
   final nethogsTool = ServerTool('nethogs');
+  late final files = FileService(this);
 
   SSHClient? client;
   SSHSession? _shell;
@@ -300,6 +302,7 @@ class SshTab extends ChangeNotifier {
     monitor.detach();
     nethogs.stop();
     nethogsTool.reset();
+    files.connectionChanged();
     final s = _shell, c = client;
     _shell = null;
     client = null;
@@ -461,6 +464,7 @@ class SshTab extends ChangeNotifier {
     monitor.dispose();
     nethogs.dispose();
     nethogsTool.dispose();
+    files.dispose();
     super.dispose();
   }
 }

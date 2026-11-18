@@ -3,11 +3,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:phoenicx_ssh/models.dart';
 import 'package:phoenicx_ssh/services/backup.dart';
+import 'package:phoenicx_ssh/services/files.dart';
 import 'package:phoenicx_ssh/services/keys.dart';
 import 'package:phoenicx_ssh/services/monitor.dart';
 import 'package:phoenicx_ssh/services/session.dart';
@@ -205,6 +207,90 @@ void main() {
       expect(tool.state, ToolState.notInstalled);
       expect(await tool.run(c, 'install'), true, reason: tool.log.join('\n'));
     });
+
+    test('files: browse, upload, download, edit, rename, chmod, folder, delete', () async {
+      final fs = tab.files;
+      final dl = await Directory.systemTemp.createTemp('phx_dl');
+      FileService.downloadsOverride = dl;
+      final home = await fs.homeDir();
+      expect(home, startsWith('/'));
+      final base = FileService.join(home, 'phx_files_test');
+      await Process.run('rm', ['-rf', base]);
+      await fs.mkdir(base);
+      expect((await fs.list(home)).any((e) => e.name == 'phx_files_test' && e.isDir), true);
+
+      // Upload 3 MB in chunks and check the bytes on the server.
+      final data = Uint8List.fromList(List.generate(3 * 1024 * 1024, (i) => (i * 31 + 7) & 0xff));
+      Stream<Uint8List> chunks() async* {
+        for (var o = 0; o < data.length; o += 100000) {
+          yield Uint8List.sublistView(data, o, (o + 100000).clamp(0, data.length));
+        }
+      }
+
+      final up = fs.upload(name: 'big.bin', remoteDir: base, size: data.length, open: chunks);
+      await waitFor(() => !up.active, 'upload finished', seconds: 60);
+      expect(up.state, TransferState.done, reason: up.error);
+      expect(File('$base/big.bin').readAsBytesSync(), data);
+
+      // Download it back.
+      final listed = await fs.list(base);
+      final big = listed.firstWhere((e) => e.name == 'big.bin');
+      expect(big.size, data.length);
+      final down = fs.download(big);
+      await waitFor(() => !down.active, 'download finished', seconds: 60);
+      expect(down.state, TransferState.done, reason: down.error);
+      expect(File(down.localPath!).readAsBytesSync(), data);
+
+      // A second download of the same name must not overwrite the first.
+      final down2 = fs.download(big);
+      await waitFor(() => !down2.active, 'second download', seconds: 60);
+      expect(down2.localPath, isNot(down.localPath));
+      expect(down2.localPath, contains('big (1).bin'));
+
+      // Edit a text file.
+      await fs.writeText('$base/note.txt', 'hello\nworld\n');
+      expect(await fs.readText('$base/note.txt'), 'hello\nworld\n');
+      expect(File('$base/note.txt').readAsStringSync(), 'hello\nworld\n');
+
+      // Rename + chmod.
+      await fs.rename('$base/note.txt', '$base/renamed.txt');
+      await fs.chmod('$base/renamed.txt', 0x1ed); // 0755
+      final r = (await fs.list(base)).firstWhere((e) => e.name == 'renamed.txt');
+      expect(r.perms, '755');
+
+      // Folder download as .tar.gz.
+      await fs.mkdir('$base/sub');
+      await fs.writeText('$base/sub/inside.txt', 'INSIDE_OK');
+      final sub = (await fs.list(base)).firstWhere((e) => e.name == 'sub');
+      final tar = await fs.downloadFolder(sub);
+      await waitFor(() => !tar.active, 'folder download', seconds: 60);
+      expect(tar.state, TransferState.done, reason: tar.error);
+      final x = await Process.run('tar', ['-xzOf', tar.localPath!, 'sub/inside.txt']);
+      expect(x.stdout.toString(), 'INSIDE_OK');
+
+      // Cancel a slow upload.
+      Stream<Uint8List> slow() async* {
+        for (var i = 0; i < 200; i++) {
+          await Future.delayed(const Duration(milliseconds: 50));
+          yield Uint8List(64 * 1024);
+        }
+      }
+
+      final c = fs.upload(name: 'slow.bin', remoteDir: base, size: 200 * 64 * 1024, open: slow);
+      await Future.delayed(const Duration(milliseconds: 600));
+      await c.cancel();
+      expect(c.state, TransferState.cancelled);
+
+      // Delete the whole test folder (recursive).
+      final folder = (await fs.list(home)).firstWhere((e) => e.name == 'phx_files_test');
+      await fs.delete(folder);
+      expect(Directory(base).existsSync(), false);
+
+      // Errors are readable.
+      await expectLater(fs.list('/root'), throwsA(isA<FileError>()));
+      FileService.downloadsOverride = null;
+      await dl.delete(recursive: true);
+    }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('reconnects by itself when the connection is killed', () async {
       final before = tab.connectedSince;

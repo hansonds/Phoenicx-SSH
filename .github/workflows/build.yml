@@ -1,12 +1,21 @@
 name: Build Phoenicx SSH
 
+# Every run builds ALL files:
+#   PhoenicxSSH-Android-arm64.apk     PhoenicxSSH-Android-universal.apk
+#   PhoenicxSSH-Play.aab              (signed with the Play upload key)
+#   PhoenicxSSH-Windows-Setup.exe     PhoenicxSSH-Windows-Portable.zip
+# They appear as downloads on the run's page (Artifacts).
+# "Run workflow" (or pushing a v* tag) also publishes them together as a
+# GitHub Release marked "Latest", so the links in README.md always point to
+# the newest files.
+
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version number (e.g. 1.0.0)"
-        required: true
-        default: "1.0.0"
+        description: "Version (e.g. 1.8.0). Leave empty to use the version in pubspec.yaml"
+        required: false
+        default: ""
   push:
     branches: [main]
     tags:
@@ -15,12 +24,13 @@ on:
 permissions:
   contents: write
 
-env:
-  APP_VERSION: ${{ github.event.inputs.version || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '0.0.1' }}
+concurrency:
+  group: build-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: false
 
 jobs:
   android:
-    name: Android
+    name: Android (APKs + Play bundle)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +46,12 @@ jobs:
           cache: true
 
       - name: Version
-        run: echo "V=${APP_VERSION#v}" >> $GITHUB_ENV
+        run: |
+          V="${{ github.event.inputs.version }}"
+          if [ -z "$V" ] && [[ "$GITHUB_REF" == refs/tags/* ]]; then V="$GITHUB_REF_NAME"; fi
+          if [ -z "$V" ]; then V=$(grep -m1 '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//'); fi
+          echo "V=${V#v}" >> $GITHUB_ENV
+          echo "Building version ${V#v}"
 
       - name: Create Android project files
         run: |
@@ -61,11 +76,11 @@ jobs:
         run: |
           flutter build apk --release --build-name "$V" --build-number "${{ github.run_number }}" --dart-define=APP_VERSION="$V"
           mkdir -p out
-          cp build/app/outputs/flutter-apk/app-release.apk "out/PhoenicxSSH-$V-universal.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk out/PhoenicxSSH-Android-universal.apk
           flutter build apk --release --split-per-abi --build-name "$V" --build-number "${{ github.run_number }}" --dart-define=APP_VERSION="$V"
-          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "out/PhoenicxSSH-$V-arm64.apk"
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk out/PhoenicxSSH-Android-arm64.apk
 
-      - name: Sign with your own key (if secrets are set)
+      - name: Sign APKs with your own key (if secrets are set)
         env:
           KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -84,20 +99,18 @@ jobs:
           rm -f ks.jks out/*.idsig
 
       - name: Build Play Store bundle (.aab)
-        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
         run: |
           flutter build appbundle --release --build-name "$V" --build-number "$((100 + ${{ github.run_number }}))" --dart-define=APP_VERSION="$V"
           cp build/app/outputs/bundle/release/app-release.aab out/app.aab
 
       - name: Sign the bundle with the Play upload key
-        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
         env:
           KEY_B64: ${{ secrets.PLAY_UPLOAD_KEY_BASE64 }}
           KEY_PASS: ${{ secrets.PLAY_UPLOAD_KEY_PASSWORD }}
         run: |
           if [ -z "$KEY_B64" ] || [ -z "$KEY_PASS" ]; then
             echo "::warning::PLAY_UPLOAD_KEY_BASE64 / PLAY_UPLOAD_KEY_PASSWORD not set - bundle left UNSIGNED."
-            mv out/app.aab "out/PhoenicxSSH-$V-play-UNSIGNED.aab"
+            mv out/app.aab out/PhoenicxSSH-Play-UNSIGNED.aab
             exit 0
           fi
           # Flutter signs release builds with the debug key by default; Play rejects that, so strip it first.
@@ -108,17 +121,26 @@ jobs:
           rm -f upload.p12
           jarsigner -verify out/app.aab | grep "jar verified"
           if keytool -printcert -jarfile out/app.aab | grep -q "Android Debug"; then echo "::error::Bundle still has the debug signature"; exit 1; fi
-          mv out/app.aab "out/PhoenicxSSH-$V-play.aab"
+          mv out/app.aab out/PhoenicxSSH-Play.aab
+
+      - name: List files
+        run: ls -la out
 
       - uses: actions/upload-artifact@v4
         with:
-          name: android
-          path: |
-            out/*.apk
-            out/*.aab
+          name: PhoenicxSSH-${{ env.V }}-Android-arm64.apk
+          path: out/PhoenicxSSH-Android-arm64.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PhoenicxSSH-${{ env.V }}-Android-universal.apk
+          path: out/PhoenicxSSH-Android-universal.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PhoenicxSSH-${{ env.V }}-Play.aab
+          path: out/*.aab
 
   windows:
-    name: Windows
+    name: Windows (Setup.exe + portable)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -130,7 +152,11 @@ jobs:
 
       - name: Version
         shell: bash
-        run: echo "V=${APP_VERSION#v}" >> $GITHUB_ENV
+        run: |
+          V="${{ github.event.inputs.version }}"
+          if [ -z "$V" ] && [[ "$GITHUB_REF" == refs/tags/* ]]; then V="$GITHUB_REF_NAME"; fi
+          if [ -z "$V" ]; then V=$(grep -m1 '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//'); fi
+          echo "V=${V#v}" >> $GITHUB_ENV
 
       - name: Create Windows project files
         shell: pwsh
@@ -148,31 +174,31 @@ jobs:
         shell: bash
         run: flutter build windows --release --build-name "$V" --build-number "${{ github.run_number }}" --dart-define=APP_VERSION="$V"
 
-      - name: Zip portable app
+      - name: Portable zip
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force out | Out-Null
-          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath "out/PhoenicxSSH-$env:V-Windows-x64-portable.zip"
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath out/PhoenicxSSH-Windows-Portable.zip
 
-      - name: Build installer (Setup.exe)
+      - name: Installer (Setup.exe)
         shell: pwsh
         run: |
           choco install innosetup --no-progress -y | Out-Null
           $iscc = Get-ChildItem "${env:ProgramFiles(x86)}\Inno Setup*\ISCC.exe", "$env:ProgramFiles\Inno Setup*\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          & $iscc.FullName "/DAppVersion=$env:V" "/DSourceDir=$PWD\build\windows\x64\runner\Release" "/DOutDir=$PWD\out" branding\windows\installer.iss
+          & $iscc.FullName "/DAppVersion=$env:V" "/DSourceDir=$PWD\build\windows\x64\runner\Release" "/DOutDir=$PWD\out" "/DOutName=PhoenicxSSH-Windows-Setup" branding\windows\installer.iss
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Get-ChildItem out
 
       - name: Test the installer (silent install + uninstall)
         shell: pwsh
         run: |
-          $setup = Get-ChildItem out\*-Setup.exe | Select-Object -First 1
+          $setup = "out\PhoenicxSSH-Windows-Setup.exe"
           $dir = "$env:RUNNER_TEMP\PhoenicxTest"
-          Start-Process $setup.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/CURRENTUSER","/DIR=`"$dir`"" -Wait
+          Start-Process $setup -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/CURRENTUSER","/DIR=`"$dir`"" -Wait
           foreach ($f in "PhoenicxSSH.exe","flutter_windows.dll","data\app.so") {
             if (!(Test-Path "$dir\$f")) { Write-Error "Installer is missing $f"; exit 1 }
           }
-          Write-Host "Installed OK:"; Get-ChildItem $dir | Select-Object Name, Length
+          Write-Host "Installed OK"
           Start-Process "$dir\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait
           Start-Sleep 3
           if (Test-Path "$dir\PhoenicxSSH.exe") { Write-Error "Uninstall left files"; exit 1 }
@@ -180,34 +206,55 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: windows
-          path: |
-            out/*.zip
-            out/*.exe
+          name: PhoenicxSSH-${{ env.V }}-Windows-Setup.exe
+          path: out/PhoenicxSSH-Windows-Setup.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PhoenicxSSH-${{ env.V }}-Windows-Portable.zip
+          path: out/PhoenicxSSH-Windows-Portable.zip
 
   release:
-    name: Publish release
+    name: Publish release (all files together)
     needs: [android, windows]
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Version
-        run: echo "V=${APP_VERSION#v}" >> $GITHUB_ENV
+        run: |
+          V="${{ github.event.inputs.version }}"
+          if [ -z "$V" ] && [[ "$GITHUB_REF" == refs/tags/* ]]; then V="$GITHUB_REF_NAME"; fi
+          if [ -z "$V" ]; then V=$(grep -m1 '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//'); fi
+          echo "V=${V#v}" >> $GITHUB_ENV
 
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
 
+      - name: Check all files are here
+        run: |
+          ls -la dist
+          for f in PhoenicxSSH-Android-arm64.apk PhoenicxSSH-Android-universal.apk PhoenicxSSH-Windows-Setup.exe PhoenicxSSH-Windows-Portable.zip; do
+            [ -f "dist/$f" ] || { echo "::error::$f is missing"; exit 1; }
+          done
+          ls dist/*.aab >/dev/null || { echo "::error::Play bundle is missing"; exit 1; }
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.V }}
           name: Phoenicx SSH v${{ env.V }}
+          make_latest: true
           files: dist/*
           body: |
-            **Which file do I need?**
-            - Samsung / modern Android phone: `PhoenicxSSH-${{ env.V }}-arm64.apk`
-            - Not sure: `PhoenicxSSH-${{ env.V }}-universal.apk` (bigger, works on every Android device)
-            - Windows (install): `PhoenicxSSH-${{ env.V }}-Windows-Setup.exe`
-            - Windows (no install): unzip `PhoenicxSSH-${{ env.V }}-Windows-x64-portable.zip` and run `PhoenicxSSH.exe`
-            - Google Play Console upload: `PhoenicxSSH-${{ env.V }}-play.aab` (signed with the upload key; not for installing on a phone)
+            ### Downloads
+            | File | For |
+            |---|---|
+            | **PhoenicxSSH-Windows-Setup.exe** | Windows 10/11 – installs with Start-menu and desktop shortcut |
+            | **PhoenicxSSH-Windows-Portable.zip** | Windows without installing – unzip and run `PhoenicxSSH.exe` |
+            | **PhoenicxSSH-Android-arm64.apk** | Samsung and other modern Android phones (smaller) |
+            | **PhoenicxSSH-Android-universal.apk** | Any Android device (bigger) |
+            | **PhoenicxSSH-Play.aab** | Google Play Console upload only (signed with the upload key) – not for installing on a phone |
+
+            The Play Store version and these APKs are signed differently: uninstall one before installing the other (export your connections first).

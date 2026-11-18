@@ -9,6 +9,7 @@ import '../services/session.dart';
 import '../services/store.dart';
 import '../theme.dart';
 import 'commands_panel.dart';
+import 'files_panel.dart';
 import 'monitor_panel.dart';
 
 class TerminalPage extends StatefulWidget {
@@ -406,7 +407,8 @@ class _TerminalPageState extends State<TerminalPage> {
                 ? const SizedBox.shrink()
                 : Row(mainAxisSize: MainAxisSize.min, children: [
                     _mini('CPU', m.cpu, PX.accent),
-                    _mini('RAM', m.memPerc, PX.blue),
+                    // Narrow phones: leave room for the Files button.
+                    if (wide || MediaQuery.sizeOf(context).width >= 400) _mini('RAM', m.memPerc, PX.blue),
                     if (wide) _netMini(m.rxRate, m.txRate),
                   ]),
           ),
@@ -420,6 +422,7 @@ class _TerminalPageState extends State<TerminalPage> {
           _iconBtn(Icons.content_copy_rounded, 'Copy selection', _copy, color: Color(0xFF8FB3F7)),
         _iconBtn(Icons.content_paste_rounded, 'Paste', _paste, color: Color(0xFF7ED3A6)),
         _commandsBtn(wide),
+        _filesBtn(wide),
         if (_touch && !wide)
           _iconBtn(Icons.keyboard_rounded, 'Keyboard', color: PX.soft, () {
             tab.setMonitorVisible(false);
@@ -520,6 +523,57 @@ class _TerminalPageState extends State<TerminalPage> {
                       style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: PX.soft)),
                 ],
               ]),
+            ),
+          ),
+        ),
+      );
+
+  void _openFiles() {
+    if (tab.status != TabStatus.connected) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Not connected')));
+      return;
+    }
+    showFiles(context, tab, wide: Layout.wide(context)).whenComplete(_grabFocus);
+  }
+
+  /// Upload / download files (SFTP). Shows a badge while transfers run.
+  Widget _filesBtn(bool wide) => Tooltip(
+        message: 'Files (upload / download)',
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2.5),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: _openFiles,
+            child: AnimatedBuilder(
+              animation: tab.files,
+              builder: (context, _) {
+                final busy = tab.files.activeCount;
+                return Container(
+                  height: 32,
+                  padding: EdgeInsets.symmetric(horizontal: wide ? 10 : 7),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    color: const Color(0xFF1A1D26),
+                    border: Border.all(color: busy > 0 ? PX.neonBlue : const Color(0xFF2B2F3B)),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.folder_copy_rounded, size: 18, color: Color(0xFF8FB3F7)),
+                    if (wide) ...[
+                      const SizedBox(width: 5),
+                      const Text('Files',
+                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: PX.soft)),
+                    ],
+                    if (busy > 0) ...[
+                      const SizedBox(width: 5),
+                      const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: PX.neonBlue),
+                      ),
+                    ],
+                  ]),
+                );
+              },
             ),
           ),
         ),

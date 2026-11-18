@@ -4,6 +4,9 @@
 #ifndef AppVersion
   #define AppVersion "1.0.0"
 #endif
+#ifndef OutName
+  #define OutName "PhoenicxSSH-" + AppVersion + "-Windows-Setup"
+#endif
 
 [Setup]
 AppId={{6C1E7B2A-4F3D-4E8B-9A57-2D1F0E5C8B31}
@@ -21,7 +24,7 @@ PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutDir}
-OutputBaseFilename=PhoenicxSSH-{#AppVersion}-Windows-Setup
+OutputBaseFilename={#OutName}
 SetupIconFile={#SourcePath}\app_icon.ico
 UninstallDisplayIcon={app}\PhoenicxSSH.exe
 UninstallDisplayName=Phoenicx SSH
