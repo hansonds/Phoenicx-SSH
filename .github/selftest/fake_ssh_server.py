@@ -128,6 +128,11 @@ def fake_monitor(chan, full):
         pass
 
 
+def event(msg):
+    with open(LOG + ".events", "a") as f:
+        f.write("%.3f %s\n" % (time.time(), msg))
+
+
 def shell(chan):
     for _ in range(40):
         if chan.get_id() in shells:
@@ -137,8 +142,13 @@ def shell(chan):
         return
     chan.send(b"Welcome to the Phoenicx SSH typing test\r\nphx$ ")
     while True:
-        data = chan.recv(1024)
+        try:
+            data = chan.recv(1024)
+        except Exception as e:
+            event("shell error %r" % e)
+            break
         if not data:
+            event("shell closed by client" if chan.closed or chan.eof_received else "shell ended")
             break
         with open(LOG, "ab") as f:
             f.write(data)
@@ -158,6 +168,7 @@ def handle(sock):
         chan = t.accept(5)
         if chan is not None:
             threading.Thread(target=shell, args=(chan,), daemon=True).start()
+    event("connection closed")
 
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

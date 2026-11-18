@@ -248,6 +248,40 @@ jobs:
           Shot "4-monitor"
           Start-Sleep 6
           Shot "5-monitor-later"
+          # ---- Closing the app: how fast does the window go away and the process end?
+          Add-Type @"
+          using System; using System.Runtime.InteropServices;
+          public class Win {
+            [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+            [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+          }
+          "@
+          $app = Get-Process phoenicx_ssh | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+          $hwnd = $app.MainWindowHandle
+          [Win]::PostMessage($hwnd, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null   # WM_CLOSE = the X button
+          Start-Sleep 2
+          Shot "6-close-dialog"
+          $closeBad = $false
+          if ($app.HasExited) {
+            Write-Host "App closed straight away (no open sessions)"
+          } else {
+            try { [Microsoft.VisualBasic.Interaction]::AppActivate("Phoenicx SSH") } catch {}
+            Start-Sleep -Milliseconds 300
+            $sw = [Diagnostics.Stopwatch]::StartNew()
+            [KB]::Press([byte[]]@(), 0x0D, $false)   # Enter = "Disconnect & close"
+            $hidden = -1; $ended = -1
+            while ($sw.ElapsedMilliseconds -lt 10000) {
+              if ($hidden -lt 0 -and -not [Win]::IsWindowVisible($hwnd)) { $hidden = $sw.ElapsedMilliseconds }
+              if ($app.HasExited) { $ended = $sw.ElapsedMilliseconds; break }
+              Start-Sleep -Milliseconds 5
+            }
+            Write-Host ("CLOSE TIMING: window gone after {0} ms, process ended after {1} ms" -f $hidden, $ended)
+            if ($hidden -lt 0 -or $hidden -gt 400) { Write-Host "::error::Window took too long to disappear ($hidden ms)"; $closeBad = $true }
+            if ($ended -lt 0 -or $ended -gt 3000) { Write-Host "::error::Process took too long to end ($ended ms)"; $closeBad = $true }
+          }
+          Start-Sleep 1
+          $svr = if (Test-Path "$log.events") { Get-Content "$log.events" -Raw } else { "" }
+          Write-Host "Server events: [$svr]"
           Get-ChildItem shots\*.png | ForEach-Object {
             $img = [System.Drawing.Image]::FromFile($_.FullName)
             $w = [int]($img.Width * 0.6); $h = [int]($img.Height * 0.6)
@@ -260,6 +294,7 @@ jobs:
           if ($t -notmatch "echo hello123") { Write-Host "::error::Typing did not reach the SSH server"; exit 1 }
           Write-Host "Typing works on Windows"
           if ($bad -gt 0) { exit 1 }
+          if ($closeBad) { exit 1 }
 
       - uses: actions/upload-artifact@v4
         if: always()

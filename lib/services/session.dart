@@ -523,6 +523,16 @@ class Sessions extends ChangeNotifier {
     }
   }
 
+  /// App is quitting: end every SSH connection cleanly (sends the SSH
+  /// "disconnect" to each server) without rebuilding any screen.
+  void shutdown() {
+    for (final t in tabs) {
+      try {
+        t.close();
+      } catch (_) {}
+    }
+  }
+
   void closeAll() {
     for (final t in [...tabs]) {
       closeTab(t);

@@ -84,13 +84,42 @@ class Store {
     }
   }
 
+  /// Writes still in progress; [flush] waits for them (used when quitting).
+  final Set<Future<void>> _pending = {};
+
+  Future<void> _track(Future<void> f) {
+    _pending.add(f);
+    return f.whenComplete(() => _pending.remove(f));
+  }
+
+  /// Waits until every save in progress has reached the disk.
+  Future<void> flush() async {
+    while (_pending.isNotEmpty) {
+      await Future.wait([..._pending].map((f) => f.catchError((_) {})));
+    }
+  }
+
   Future<void> saveHosts() async {
     if (!ready) return;
     final data = utf8.encode(jsonEncode(hosts.value.map((h) => h.toJson()).toList()));
     final enc = aesGcmEncrypt(_key!, Uint8List.fromList(data));
-    final tmp = File('${_hostsFile.path}.tmp');
-    await tmp.writeAsBytes(enc, flush: true);
-    await tmp.rename(_hostsFile.path);
+    await _track(_atomicWrite(_hostsFile, enc));
+  }
+
+  final Map<String, Future<void>> _chains = {};
+
+  /// Write to a temp file, then swap it in, so a crash or a quick exit can
+  /// never leave a half-written file. Saves of the same file run one after
+  /// another (quick repeated saves, e.g. while pinch-zooming, never collide).
+  Future<void> _atomicWrite(File target, List<int> bytes) {
+    final prev = _chains[target.path] ?? Future<void>.value();
+    final next = prev.catchError((_) {}).then((_) async {
+      final tmp = File('${target.path}.tmp');
+      await tmp.writeAsBytes(bytes, flush: true);
+      await tmp.rename(target.path);
+    });
+    _chains[target.path] = next;
+    return next;
   }
 
   Future<void> upsert(HostConfig h) async {
@@ -123,7 +152,7 @@ class Store {
       settingsVersion.value++;
       return;
     }
-    await _settingsFile.writeAsString(jsonEncode(settings.toJson()));
+    await _track(_atomicWrite(_settingsFile, utf8.encode(jsonEncode(settings.toJson()))));
     settingsVersion.value++;
   }
 }

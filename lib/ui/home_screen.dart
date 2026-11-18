@@ -54,14 +54,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Wi
           content: Text('$live SSH session${live == 1 ? ' is' : 's are'} still open. Closing the app disconnects ${live == 1 ? 'it' : 'them'}.'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Disconnect & close')),
+            FilledButton(
+              autofocus: true, // Enter confirms
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Disconnect & close'),
+            ),
           ],
         ),
       );
       if (ok != true) return;
     }
-    _sessions.closeAll();
-    await windowManager.destroy();
+    await _quit();
+  }
+
+  bool _quitting = false;
+
+  /// Fast exit: the window disappears at once, then the SSH sessions are
+  /// closed and pending saves finish in the background before the process ends.
+  /// (Closing tabs one by one and letting the engine tear down every screen
+  /// is what made closing feel slow.)
+  Future<void> _quit() async {
+    if (_quitting) return;
+    _quitting = true;
+    try {
+      await windowManager.hide();
+    } catch (_) {}
+    _sessions.shutdown();
+    try {
+      await Store.I.flush().timeout(const Duration(seconds: 2));
+    } catch (_) {}
+    // A moment for the SSH "disconnect" packets to leave the socket.
+    await Future.delayed(const Duration(milliseconds: 150));
+    exit(0);
   }
 
   Future<void> _closeTab(SshTab t) async {
