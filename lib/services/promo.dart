@@ -15,7 +15,7 @@ class Promo {
   static const packageId = 'com.hanson.phoenicx_ssh';
   static const storeUrl = 'https://play.google.com/store/apps/details?id=$packageId';
 
-  static const shareText = 'Phoenicx SSH — a free SSH client for Android and Windows.\n'
+  static const shareText = 'Phoenicx SSH — a free SSH client for Android.\n'
       '• Sessions stay connected until you close them\n'
       '• Upload and download files (SFTP)\n'
       '• Live server monitor: CPU, RAM, network, processes, Docker\n\n'
