@@ -10,6 +10,10 @@
 </p>
 
 <p align="center">
+  <a href="https://play.google.com/store/apps/details?id=com.hanson.phoenicx_ssh"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="80"></a>
+</p>
+
+<p align="center">
   <a href="https://github.com/hansonds/Phoenicx-SSH/releases/latest/download/PhoenicxSSH-Windows-Setup.exe"><b>⬇ Windows installer (.exe)</b></a> ·
   <a href="https://github.com/hansonds/Phoenicx-SSH/releases/latest/download/PhoenicxSSH-Windows-Portable.zip"><b>⬇ Windows portable (.zip)</b></a> ·
   <a href="https://github.com/hansonds/Phoenicx-SSH/releases/latest/download/PhoenicxSSH-Android-arm64.apk"><b>⬇ Android (.apk)</b></a>
@@ -25,14 +29,26 @@ These links always give you the newest version.
 |---|---|---|
 | **Windows 10/11 (recommended)** | [PhoenicxSSH-Windows-Setup.exe](https://github.com/hansonds/Phoenicx-SSH/releases/latest/download/PhoenicxSSH-Windows-Setup.exe) | Run it. It adds Phoenicx SSH to the Start menu (and the desktop if you tick the box). No admin rights needed. |
 | Windows, no install | [PhoenicxSSH-Windows-Portable.zip](https://github.com/hansonds/Phoenicx-SSH/releases/latest/download/PhoenicxSSH-Windows-Portable.zip) | Unzip it anywhere (even a USB stick) and run `PhoenicxSSH.exe`. |
-| **Android phone (Samsung etc.)** | [PhoenicxSSH-Android-arm64.apk](https://github.com/hansonds/Phoenicx-SSH/releases/latest/download/PhoenicxSSH-Android-arm64.apk) | Open the file and allow "Install unknown apps" when asked. |
+| **Android (recommended)** | [<img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="50">](https://play.google.com/store/apps/details?id=com.hanson.phoenicx_ssh) | Install from Google Play. Updates arrive automatically. |
+| Android phone, without Play | [PhoenicxSSH-Android-arm64.apk](https://github.com/hansonds/Phoenicx-SSH/releases/latest/download/PhoenicxSSH-Android-arm64.apk) | Open the file and allow "Install unknown apps" when asked. |
 | Any Android (if unsure) | [PhoenicxSSH-Android-universal.apk](https://github.com/hansonds/Phoenicx-SSH/releases/latest/download/PhoenicxSSH-Android-universal.apk) | Bigger, but works on every Android device. |
 
 Older versions and release notes: [all releases](https://github.com/hansonds/Phoenicx-SSH/releases).
 
 If Windows SmartScreen says "Windows protected your PC", click **More info → Run anyway**. The app isn't code-signed yet.
 
-> The Google Play version and the APKs here are signed differently, so Android won't install one over the other. Export your connections first (Servers → Export), uninstall, install the other one, then import.
+> **Google Play or APK, pick one per phone.** The two are signed differently, so Android won't install one over the other. To switch: Servers → **Export**, uninstall, install the other one, then **Import**.
+>
+> New APKs (from v1.8.6) install straight over the previous APK and keep your servers. If you have an APK older than v1.8.6, uninstall it once first (export your connections before).
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/1-monitor.jpg" width="200" alt="Live server monitor"> <img src="docs/screenshots/2-files.jpg" width="200" alt="File transfer"> <img src="docs/screenshots/3-terminal.jpg" width="200" alt="SSH terminal"> <img src="docs/screenshots/6-editor.jpg" width="200" alt="Edit server files">
+</p>
+<p align="center">
+  <img src="docs/screenshots/4-network.jpg" width="200" alt="Network and disks"> <img src="docs/screenshots/5-processes.jpg" width="200" alt="Processes and Docker"> <img src="docs/screenshots/7-commands.jpg" width="200" alt="One-tap commands"> <img src="docs/screenshots/8-servers.jpg" width="200" alt="All your servers">
+</p>
 
 ## Features
 
@@ -59,6 +75,7 @@ If Windows SmartScreen says "Windows protected your PC", click **More info → R
 - **Light on the server.** Monitoring runs as one small shell loop that reads `/proc`, with no agent to install. Process and Docker stats are collected only while the monitor panel is open.
 - Touch keys on Android (Esc, Tab, Ctrl, Alt, arrows and more). On Windows, right-click copies and pastes like PuTTY.
 - Logins are stored encrypted on the device: AES-256-GCM, with the key kept in the Android Keystore or Windows DPAPI.
+- **Share and rate** (Android): send the app to a friend with one tap, or rate it on Google Play.
 - No account, no ads, no tracking. See the [privacy policy](PRIVACY.md).
 
 ## Connect to an Oracle Cloud instance
@@ -83,3 +100,5 @@ If Windows SmartScreen says "Windows protected your PC", click **More info → R
 Made by **Hanson** · [phoenicx.org](https://phoenicx.org)
 
 Built with Flutter, [dartssh2](https://pub.dev/packages/dartssh2) and [xterm.dart](https://github.com/TerminalStudio/xterm.dart).
+
+Google Play and the Google Play logo are trademarks of Google LLC.
