@@ -345,6 +345,10 @@ jobs:
             [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
             [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
             [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+            [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint f);
+            [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
+            [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int a, out RECT r, int size);
+            public static RECT Frame(IntPtr h) { RECT r; DwmGetWindowAttribute(h, 9, out r, Marshal.SizeOf(typeof(RECT))); return r; }
             public static int Set(int w, int h) {
               DEVMODE dm = new DEVMODE(); dm.dmSize = (short)Marshal.SizeOf(typeof(DEVMODE));
               EnumDisplaySettings(null, -1, ref dm); dm.dmPelsWidth = w; dm.dmPelsHeight = h; dm.dmFields = 0x80000 | 0x100000;
@@ -407,27 +411,32 @@ jobs:
           if (-not (Get-NetTCPConnection -LocalPort 22 -State Listen -ErrorAction SilentlyContinue)) { Write-Error "demo server not listening on 22"; exit 1 }
 
           New-Item -ItemType Directory -Force store | Out-Null
-          function Shot($name) {
-            $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
-            $bmp = New-Object System.Drawing.Bitmap $wa.Width, $wa.Height
+          function Shot($name, $h) {
+            # Only the app window (DWM frame bounds, no shadow).
+            $r = [Disp]::Frame($h)
+            $w = $r.R - $r.L; $ht = $r.B - $r.T
+            $bmp = New-Object System.Drawing.Bitmap $w, $ht
             $g = [System.Drawing.Graphics]::FromImage($bmp)
-            $g.CopyFromScreen($wa.Location, [System.Drawing.Point]::Empty, $wa.Size)
+            $g.CopyFromScreen((New-Object System.Drawing.Point $r.L, $r.T), [System.Drawing.Point]::Empty, (New-Object System.Drawing.Size $w, $ht))
             $bmp.Save("store\$name.png", [System.Drawing.Imaging.ImageFormat]::Png)
             $g.Dispose(); $bmp.Dispose()
-            Write-Host "shot $name $($wa.Width)x$($wa.Height)"
+            Write-Host "shot $name ${w}x${ht}"
           }
           function RunApp($vars, $shots) {
             Remove-Item -Recurse -Force "$env:APPDATA\com.hanson" -ErrorAction SilentlyContinue
             foreach ($k in $vars.Keys) { Set-Item "env:$k" $vars[$k] }
             $p = Start-Process "build\windows\x64\runner\Release\phoenicx_ssh.exe" -PassThru
             for ($i = 0; $i -lt 40 -and $p.MainWindowHandle -eq 0; $i++) { Start-Sleep -Milliseconds 250; $p.Refresh() }
-            [Disp]::ShowWindow($p.MainWindowHandle, 3) | Out-Null
-            [Disp]::SetForegroundWindow($p.MainWindowHandle) | Out-Null
+            $h = $p.MainWindowHandle
             $t0 = Get-Date
+            Start-Sleep 3   # let the app restore its own window size first
+            # 1600x900, centred, always on top (covers the runner's console window)
+            [Disp]::SetWindowPos($h, [IntPtr](-1), 160, 66, 1600, 900, 0x0040) | Out-Null
+            [Disp]::SetForegroundWindow($h) | Out-Null
             foreach ($s in $shots) {
               $wait = $s[1] - ((Get-Date) - $t0).TotalSeconds
               if ($wait -gt 0) { Start-Sleep -Milliseconds ([int]($wait * 1000)) }
-              Shot $s[0]
+              Shot $s[0] $h
             }
             Stop-Process -Id $p.Id -Force
             foreach ($k in $vars.Keys) { Remove-Item "env:$k" -ErrorAction SilentlyContinue }
@@ -435,9 +444,9 @@ jobs:
           }
           $base = @{ PHOENICX_SELFTEST = "ubuntu:demo@oracle-mumbai:22"; PHOENICX_STORE = "1" }
           RunApp ($base + @{ PHOENICX_SELFTEST_COMMANDS = "16" }) @(@("w-terminal", 12), @("w-commands", 19))
-          RunApp ($base + @{ PHOENICX_SELFTEST_MONITOR = "4" }) @(@("w-monitor", 26))
-          RunApp ($base + @{ PHOENICX_SELFTEST_FILES = "6"; PHOENICX_SELFTEST_FILES_PATH = "/home/ubuntu/jellyfin"; PHOENICX_SELFTEST_UPLOAD_DIR = $web; PHOENICX_SELFTEST_DOWNLOAD = "backup-2026-11.tar.gz" }) @(@("w-files", 15))
-          RunApp ($base + @{ PHOENICX_SELFTEST_FILES = "6"; PHOENICX_SELFTEST_FILES_PATH = "/home/ubuntu/jellyfin"; PHOENICX_SELFTEST_EDIT = "docker-compose.yml" }) @(@("w-editor", 13))
+          RunApp ($base + @{ PHOENICX_SELFTEST_MONITOR = "4" }) @(,@("w-monitor", 26))
+          RunApp ($base + @{ PHOENICX_SELFTEST_FILES = "6"; PHOENICX_SELFTEST_FILES_PATH = "/home/ubuntu/jellyfin"; PHOENICX_SELFTEST_UPLOAD_DIR = $web; PHOENICX_SELFTEST_DOWNLOAD = "backup-2026-11.tar.gz" }) @(,@("w-files", 15))
+          RunApp ($base + @{ PHOENICX_SELFTEST_FILES = "6"; PHOENICX_SELFTEST_FILES_PATH = "/home/ubuntu/jellyfin"; PHOENICX_SELFTEST_EDIT = "docker-compose.yml" }) @(,@("w-editor", 13))
           Get-ChildItem store | ForEach-Object {
             $jpg = [IO.Path]::ChangeExtension($_.FullName, ".jpg")
             $img = [System.Drawing.Image]::FromFile($_.FullName)
