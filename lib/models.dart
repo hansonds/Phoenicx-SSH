@@ -143,6 +143,11 @@ class AppSettings {
   bool rightClickPaste;
   bool ctrlVPaste;
 
+  /// Android: times the app was opened, and whether Google's rating popup
+  /// has been requested yet (asked once, after a few launches).
+  int launchCount;
+  bool reviewAsked;
+
   /// host:port -> "SHA256:..." fingerprint accepted by the user.
   Map<String, String> knownHosts;
 
@@ -161,6 +166,8 @@ class AppSettings {
     this.keepCpuAwake = true,
     this.rightClickPaste = true,
     this.ctrlVPaste = true,
+    this.launchCount = 0,
+    this.reviewAsked = false,
     Map<String, String>? knownHosts,
     List<Snippet>? snippets,
   })  : knownHosts = knownHosts ?? {},
@@ -185,6 +192,8 @@ class AppSettings {
         'keepCpuAwake': keepCpuAwake,
         'rightClickPaste': rightClickPaste,
         'ctrlVPaste': ctrlVPaste,
+        'launchCount': launchCount,
+        'reviewAsked': reviewAsked,
         'knownHosts': knownHosts,
         'snippets': snippets.map((e) => e.toJson()).toList(),
       };
@@ -199,6 +208,8 @@ class AppSettings {
         keepCpuAwake: (j['keepCpuAwake'] as bool?) ?? true,
         rightClickPaste: (j['rightClickPaste'] as bool?) ?? true,
         ctrlVPaste: (j['ctrlVPaste'] as bool?) ?? true,
+        launchCount: (j['launchCount'] as num?)?.toInt() ?? 0,
+        reviewAsked: (j['reviewAsked'] as bool?) ?? false,
         knownHosts: ((j['knownHosts'] as Map?) ?? {})
             .map((k, v) => MapEntry(k.toString(), v.toString())),
         snippets: (j['snippets'] as List?)

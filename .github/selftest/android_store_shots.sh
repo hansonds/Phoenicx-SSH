@@ -164,6 +164,16 @@ adb shell wm density reset; sleep 4
 # 6) Servers list
 tap 55 75 3
 shot s1-servers
+# Share + rate buttons on the servers screen
+dumptexts
+tapdesc "Share app" 5
+shot x-share
+dumptexts
+adb shell input keyevent 4; sleep 2
+tapdesc "Rate on Google Play" 6
+shot x-rate
+adb shell dumpsys activity activities | grep -m3 -E "topResumedActivity|mResumedActivity" || true
+adb shell input keyevent 4; sleep 2
 ls -la store
 
 if [ -n "$FOLDER_FAIL" ]; then exit 1; fi

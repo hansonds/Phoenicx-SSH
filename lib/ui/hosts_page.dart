@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../models.dart';
 import '../services/backup.dart';
 import '../services/session.dart';
+import '../services/promo.dart';
 import '../services/store.dart';
 import '../theme.dart';
 import 'host_editor.dart';
@@ -205,6 +206,20 @@ class _HostsPageState extends State<HostsPage> {
           const Text('Phoenicx SSH', style: TextStyle(fontWeight: FontWeight.w700)),
         ]),
         actions: [
+          if (Platform.isAndroid) ...[
+            Builder(
+              builder: (bc) => IconButton(
+                tooltip: 'Share app',
+                icon: const Icon(Icons.share_outlined),
+                onPressed: () => Promo.shareApp(bc),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Rate on Google Play',
+              icon: const Icon(Icons.star_outline_rounded, color: Color(0xFFF4A947)),
+              onPressed: Promo.rateOnPlay,
+            ),
+          ],
           IconButton(
             tooltip: 'Settings',
             icon: const Icon(Icons.settings_outlined),

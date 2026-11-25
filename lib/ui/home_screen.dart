@@ -6,6 +6,7 @@ import 'package:window_manager/window_manager.dart';
 import '../models.dart';
 import '../services/keepalive.dart';
 import '../services/session.dart';
+import '../services/promo.dart';
 import '../services/store.dart';
 import '../theme.dart';
 import 'hosts_page.dart';
@@ -28,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Wi
     if (Platform.isWindows) windowManager.addListener(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       SessionKeeper.requestNotificationPermission();
+      Promo.onLaunch();
     });
   }
 

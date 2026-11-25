@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../services/keepalive.dart';
 import '../services/session.dart';
+import '../services/promo.dart';
 import '../services/store.dart';
 import '../theme.dart';
 
@@ -184,6 +185,28 @@ class _SettingsPageState extends State<SettingsPage> {
                 subtitle: const Text('Version $appVersion\nMade by Hanson', style: TextStyle(color: PX.muted)),
                 isThreeLine: true,
               ),
+              if (Platform.isAndroid) ...[
+                Builder(
+                  builder: (bc) => ListTile(
+                    leading: const Icon(Icons.share_outlined, color: PX.accent),
+                    title: const Text('Share Phoenicx SSH'),
+                    subtitle: const Text('Send the app to a friend', style: TextStyle(color: PX.muted)),
+                    onTap: () => Promo.shareApp(bc),
+                  ),
+                ),
+                const ListTile(
+                  leading: Icon(Icons.star_outline_rounded, color: Color(0xFFF4A947)),
+                  title: Text('Rate on Google Play'),
+                  subtitle: Text('A quick rating helps a lot', style: TextStyle(color: PX.muted)),
+                  onTap: Promo.rateOnPlay,
+                ),
+              ] else
+                ListTile(
+                  leading: const Icon(Icons.phone_android_rounded, color: PX.accent),
+                  title: const Text('Get the Android app'),
+                  subtitle: const Text('Phoenicx SSH on Google Play', style: TextStyle(color: PX.muted)),
+                  onTap: () => launchUrl(Uri.parse(Promo.storeUrl), mode: LaunchMode.externalApplication),
+                ),
               ListTile(
                 leading: const Icon(Icons.language, color: PX.accent),
                 title: const Text('phoenicx.org'),
