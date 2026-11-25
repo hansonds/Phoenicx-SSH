@@ -10,7 +10,7 @@ import 'services/session.dart';
 import 'services/store.dart';
 import 'theme.dart';
 import 'ui/home_screen.dart';
-import 'ui/terminal_page.dart' show commandsRequest;
+import 'ui/terminal_page.dart' show commandsRequest, filesRequest;
 
 final navKey = GlobalKey<NavigatorState>();
 
@@ -62,7 +62,7 @@ void _selfTest() {
   SshTab.hostKeyPrompt = null;
   final monitorAfter = int.tryParse(Platform.environment['PHOENICX_SELFTEST_MONITOR'] ??
       const String.fromEnvironment('SELFTEST_MONITOR'));
-  const storeShots = bool.fromEnvironment('SELFTEST_STORE');
+  final storeShots = const bool.fromEnvironment('SELFTEST_STORE') || Platform.environment['PHOENICX_STORE'] == '1';
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     if (storeShots) {
       // Example servers so the store screenshots look like real use.
@@ -88,6 +88,10 @@ void _selfTest() {
     final commandsAfter = int.tryParse(Platform.environment['PHOENICX_SELFTEST_COMMANDS'] ?? '');
     if (commandsAfter != null) {
       Future.delayed(Duration(seconds: commandsAfter), () => commandsRequest.value++);
+    }
+    final filesAfter = int.tryParse(Platform.environment['PHOENICX_SELFTEST_FILES'] ?? '');
+    if (filesAfter != null) {
+      Future.delayed(Duration(seconds: filesAfter), () => filesRequest.value++);
     }
     if (monitorAfter != null) {
       Future.delayed(Duration(seconds: monitorAfter), () => t.setMonitorExpanded(true));

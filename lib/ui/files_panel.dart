@@ -88,13 +88,37 @@ class _FilesPanelState extends State<FilesPanel> {
 
   Future<void> _start() async {
     try {
-      final start = fs.cwd ?? await fs.homeDir();
+      final env = Platform.environment;
+      final start = env['PHOENICX_SELFTEST_FILES_PATH'] ?? fs.cwd ?? await fs.homeDir();
       await _open(start);
+      _selfTestActions(env);
     } catch (e) {
       setState(() {
         _loading = false;
         _error = e.toString();
       });
+    }
+  }
+
+  /// Automated screenshot tests only (environment variables set by the test).
+  Future<void> _selfTestActions(Map<String, String> env) async {
+    final up = env['PHOENICX_SELFTEST_UPLOAD_DIR'];
+    if (up != null && _dir != null) {
+      final t = fs.uploadFolder(await LocalFolder.fromDirectory(Directory(up)), _dir!);
+      while (t.active) {
+        await Future.delayed(const Duration(milliseconds: 200));
+      }
+      await _refresh();
+    }
+    final dl = env['PHOENICX_SELFTEST_DOWNLOAD'];
+    if (dl != null) {
+      final e = _items.where((e) => e.name == dl).firstOrNull;
+      if (e != null) _download(e);
+    }
+    final ed = env['PHOENICX_SELFTEST_EDIT'];
+    if (ed != null) {
+      final e = _items.where((e) => e.name == ed).firstOrNull;
+      if (e != null) _edit(e);
     }
   }
 

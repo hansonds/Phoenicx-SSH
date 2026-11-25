@@ -4,6 +4,8 @@ Accepts user "test" / password "test", gives an interactive shell that echoes
 what is typed and logs every received byte to the file given as argv[1].
 Exec requests (used by the app's monitor) are answered and closed at once.
 """
+import os
+import posixpath
 import socket
 import sys
 import threading
@@ -12,6 +14,9 @@ import time
 import paramiko
 
 LOG = sys.argv[1]
+PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 2222
+# Demo mode (store screenshots): realistic Ubuntu shell + SFTP on a demo folder.
+DEMO_ROOT = os.environ.get("PHX_DEMO_ROOT")  # real folder that is "/" for SFTP
 KEY = paramiko.RSAKey.generate(2048)
 shells = set()
 
@@ -24,7 +29,8 @@ class Server(paramiko.ServerInterface):
         return "password"
 
     def check_auth_password(self, username, password):
-        return paramiko.AUTH_SUCCESSFUL if (username, password) == ("test", "test") else paramiko.AUTH_FAILED
+        ok = (username, password) in (("test", "test"), ("ubuntu", "demo"))
+        return paramiko.AUTH_SUCCESSFUL if ok else paramiko.AUTH_FAILED
 
     def check_channel_pty_request(self, *args):
         return True
@@ -140,6 +146,9 @@ def shell(chan):
         time.sleep(0.05)
     else:
         return
+    if DEMO_ROOT:
+        demo_shell(chan)
+        return
     chan.send(b"Welcome to the Phoenicx SSH typing test\r\nphx$ ")
     while True:
         try:
@@ -160,9 +169,164 @@ def shell(chan):
         chan.send(out)
 
 
+G = "\x1b[01;32m"; B = "\x1b[01;34m"; R = "\x1b[0m"; C = "\x1b[01;36m"; Y = "\x1b[33m"
+PROMPT = G + "ubuntu@oracle-mumbai" + R + ":" + B + "~" + R + "$ "
+BANNER = (
+    "Welcome to Ubuntu 24.04.1 LTS (GNU/Linux 6.8.0-1015-oracle aarch64)\n\n"
+    " * Documentation:  https://help.ubuntu.com\n"
+    " * Management:     https://landscape.canonical.com\n\n"
+    "  System information as of Wed Nov 25 11:42:08 IST 2026\n\n"
+    "  System load:  1.32               Processes:             212\n"
+    "  Usage of /:   16.1% of 173.18GB  Users logged in:       1\n"
+    "  Memory usage: 26%                IPv4 address for enp0s6: 10.0.0.42\n"
+    "  Swap usage:   7%\n\n"
+    "Last login: Wed Nov 25 09:14:51 2026 from 49.37.120.18\n"
+)
+SCRIPT = [
+    ("uptime", " 11:42:15 up 4 days,  9:03,  1 user,  load average: 1.32, 0.98, 0.85\n"),
+    ("docker ps --format 'table {{.Names}}\\t{{.Status}}\\t{{.Ports}}'",
+     "NAMES       STATUS        PORTS\n"
+     "jellyfin    Up 4 days     0.0.0.0:8096->8096/tcp\n"
+     "caddy       Up 4 days     0.0.0.0:80->80/tcp, 0.0.0.0:443->443/tcp\n"
+     "movie_bot   Up 2 days\n"
+     "wireguard   Up 4 days     0.0.0.0:51820->51820/udp\n"),
+    ("free -h",
+     "               total        used        free      shared  buff/cache   available\n"
+     "Mem:            23Gi       6.2Gi       9.8Gi        52Mi       7.4Gi        16Gi\n"
+     "Swap:          4.0Gi       287Mi       3.7Gi\n"),
+    ("df -h /",
+     "Filesystem      Size  Used Avail Use% Mounted on\n"
+     "/dev/sda1       174G   28G  146G  16% /\n"),
+    ("ls",
+     B + "jellyfin" + R + "  " + B + "movie_bot" + R + "  " + B + "backups" + R + "  " + C + "media" + R + "  update.sh\n"),
+]
+
+
+def demo_shell(chan):
+    def out(text):
+        chan.send(text.replace("\n", "\r\n").encode())
+    out(BANNER)
+    for cmd, res in SCRIPT:
+        out(PROMPT)
+        time.sleep(0.15)
+        out(cmd + "\n")
+        out(res)
+    out(PROMPT)
+    while True:
+        try:
+            data = chan.recv(1024)
+        except Exception:
+            break
+        if not data:
+            break
+        o = data.replace(b"\r", b"\r\n")
+        if b"\r" in data:
+            o += PROMPT.encode()
+        chan.send(o)
+
+
+class DemoSFTPHandle(paramiko.SFTPHandle):
+    def stat(self):
+        try:
+            return paramiko.SFTPAttributes.from_stat(os.fstat(self.readfile.fileno()))
+        except OSError as e:
+            return paramiko.SFTPServer.convert_errno(e.errno)
+
+    def chattr(self, attr):
+        return paramiko.SFTP_OK
+
+
+class DemoSFTP(paramiko.SFTPServerInterface):
+    def __init__(self, server, *a, **k):
+        super().__init__(server, *a, **k)
+
+    def _real(self, path):
+        return os.path.join(DEMO_ROOT, self.canonicalize(path).lstrip("/"))
+
+    def canonicalize(self, path):
+        if path in ("", "."):
+            return "/home/ubuntu"
+        if not path.startswith("/"):
+            path = "/home/ubuntu/" + path
+        return posixpath.normpath(path)
+
+    def list_folder(self, path):
+        real = self._real(path)
+        try:
+            out = []
+            for name in os.listdir(real):
+                attr = paramiko.SFTPAttributes.from_stat(os.stat(os.path.join(real, name)))
+                attr.filename = name
+                out.append(attr)
+            return out
+        except OSError as e:
+            return paramiko.SFTPServer.convert_errno(e.errno)
+
+    def stat(self, path):
+        try:
+            return paramiko.SFTPAttributes.from_stat(os.stat(self._real(path)))
+        except OSError as e:
+            return paramiko.SFTPServer.convert_errno(e.errno)
+
+    lstat = stat
+
+    def open(self, path, flags, attr):
+        real = self._real(path)
+        try:
+            binary = getattr(os, "O_BINARY", 0)
+            fd = os.open(real, flags | binary, 0o644)
+        except OSError as e:
+            return paramiko.SFTPServer.convert_errno(e.errno)
+        if flags & os.O_WRONLY:
+            mode = "ab" if flags & os.O_APPEND else "wb"
+        elif flags & os.O_RDWR:
+            mode = "a+b" if flags & os.O_APPEND else "r+b"
+        else:
+            mode = "rb"
+        f = os.fdopen(fd, mode)
+        h = DemoSFTPHandle(flags)
+        h.filename = real
+        h.readfile = f
+        h.writefile = f
+        return h
+
+    def remove(self, path):
+        try:
+            os.remove(self._real(path))
+        except OSError as e:
+            return paramiko.SFTPServer.convert_errno(e.errno)
+        return paramiko.SFTP_OK
+
+    def rename(self, old, new):
+        try:
+            os.rename(self._real(old), self._real(new))
+        except OSError as e:
+            return paramiko.SFTPServer.convert_errno(e.errno)
+        return paramiko.SFTP_OK
+
+    def mkdir(self, path, attr):
+        try:
+            os.mkdir(self._real(path))
+        except OSError as e:
+            return paramiko.SFTPServer.convert_errno(e.errno)
+        return paramiko.SFTP_OK
+
+    def rmdir(self, path):
+        try:
+            os.rmdir(self._real(path))
+        except OSError as e:
+            return paramiko.SFTPServer.convert_errno(e.errno)
+        return paramiko.SFTP_OK
+
+    def chattr(self, path, attr):
+        return paramiko.SFTP_OK
+
+
 def handle(sock):
     t = paramiko.Transport(sock)
     t.add_server_key(KEY)
+    if DEMO_ROOT:
+        t.set_subsystem_handler("sftp", paramiko.SFTPServer, DemoSFTP)
     t.start_server(server=Server())
     while t.is_active():
         chan = t.accept(5)
@@ -173,7 +337,7 @@ def handle(sock):
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-s.bind(("127.0.0.1", 2222))
+s.bind(("127.0.0.1", PORT))
 s.listen(5)
 print("fake ssh server ready", flush=True)
 while True:

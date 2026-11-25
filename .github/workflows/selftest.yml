@@ -302,6 +302,152 @@ jobs:
           name: windows-screenshots
           path: shots/
 
+  windows_store:
+    name: Windows store screenshots
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build
+        shell: pwsh
+        run: |
+          flutter create --org com.hanson --project-name phoenicx_ssh --platforms windows .
+          (Get-Content windows/runner/main.cpp) -replace 'L"phoenicx_ssh"', 'L"Phoenicx SSH"' | Set-Content windows/runner/main.cpp
+          flutter pub get
+          flutter build windows --release
+
+      - name: Take store screenshots (1920x1080)
+        shell: pwsh
+        run: |
+          pip install -q paramiko
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          Add-Type @"
+          using System; using System.Runtime.InteropServices;
+          public class Disp {
+            [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]
+            public struct DEVMODE {
+              [MarshalAs(UnmanagedType.ByValTStr, SizeConst=32)] public string dmDeviceName;
+              public short dmSpecVersion, dmDriverVersion, dmSize, dmDriverExtra; public int dmFields;
+              public int dmPositionX, dmPositionY, dmDisplayOrientation, dmDisplayFixedOutput;
+              public short dmColor, dmDuplex, dmYResolution, dmTTOption, dmCollate;
+              [MarshalAs(UnmanagedType.ByValTStr, SizeConst=32)] public string dmFormName;
+              public short dmLogPixels; public int dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency;
+              public int dmICMMethod, dmICMIntent, dmMediaType, dmDitherType, dmReserved1, dmReserved2, dmPanningWidth, dmPanningHeight;
+            }
+            [DllImport("user32.dll")] public static extern bool EnumDisplaySettings(string d, int m, ref DEVMODE dm);
+            [DllImport("user32.dll")] public static extern int ChangeDisplaySettings(ref DEVMODE dm, int f);
+            [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
+            [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+            [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+            public static int Set(int w, int h) {
+              DEVMODE dm = new DEVMODE(); dm.dmSize = (short)Marshal.SizeOf(typeof(DEVMODE));
+              EnumDisplaySettings(null, -1, ref dm); dm.dmPelsWidth = w; dm.dmPelsHeight = h; dm.dmFields = 0x80000 | 0x100000;
+              return ChangeDisplaySettings(ref dm, 0);
+            }
+          }
+          "@
+          [Disp]::SetProcessDPIAware() | Out-Null
+          Write-Host "Set resolution result: $([Disp]::Set(1920,1080))"
+          Start-Sleep 3
+          Write-Host "Screen: $([System.Windows.Forms.Screen]::PrimaryScreen.Bounds) work area: $([System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea)"
+
+          # The demo server answers as "oracle-mumbai" on port 22.
+          Add-Content C:\Windows\System32\drivers\etc\hosts "`n127.0.0.1 oracle-mumbai"
+          $root = "$env:RUNNER_TEMP\demo"
+          $j = "$root\home\ubuntu\jellyfin"
+          foreach ($d in "config","cache","media") { New-Item -ItemType Directory -Force "$j\$d" | Out-Null }
+          foreach ($d in "backups","movie_bot","media") { New-Item -ItemType Directory -Force "$root\home\ubuntu\$d" | Out-Null }
+          Set-Content "$root\home\ubuntu\update.sh" "#!/bin/bash`nsudo apt update && sudo apt upgrade -y"
+          $compose = @"
+          services:
+            jellyfin:
+              image: jellyfin/jellyfin:latest
+              container_name: jellyfin
+              restart: unless-stopped
+              network_mode: host
+              volumes:
+                - ./config:/config
+                - ./cache:/cache
+                - ./media:/media:ro
+              environment:
+                - TZ=Asia/Kolkata
+                - JELLYFIN_PublishedServerUrl=https://media.example.org
+
+            caddy:
+              image: caddy:2
+              container_name: caddy
+              restart: unless-stopped
+              ports:
+                - "80:80"
+                - "443:443"
+              volumes:
+                - ./Caddyfile:/etc/caddy/Caddyfile
+          "@
+          [IO.File]::WriteAllText("$j\docker-compose.yml", (($compose -split "`r?`n" | ForEach-Object { $_ -replace '^          ', '' }) -join "`n"))
+          [IO.File]::WriteAllText("$j\Caddyfile", "media.example.org {`n    reverse_proxy localhost:8096`n    encode gzip`n}`n")
+          $log = 1..400 | ForEach-Object { "[2026-11-25 09:$('{0:d2}' -f ($_ % 60)):00] [INF] Playback progress: item=$_" }
+          [IO.File]::WriteAllText("$j\jellyfin.log", ($log -join "`n"))
+          [IO.File]::WriteAllText("$j\movie_bot.py", "import os`nprint('movie bot ready')`n")
+          fsutil file createnew "$j\backup-2026-11.tar.gz" 943718400 | Out-Null
+          $web = "$env:RUNNER_TEMP\website"
+          New-Item -ItemType Directory -Force "$web\assets" | Out-Null
+          foreach ($f in "index.html","about.html","contact.html","style.css","app.js") { Set-Content "$web\$f" "<!-- $f -->" }
+          [IO.File]::WriteAllBytes("$web\assets\hero.jpg", (New-Object byte[] 900000))
+
+          $env:PHX_DEMO_ROOT = $root
+          Stop-Service sshd -ErrorAction SilentlyContinue
+          Start-Process python -ArgumentList ".github/selftest/fake_ssh_server.py", "$env:RUNNER_TEMP\demo.log", "22" -WindowStyle Hidden
+          Start-Sleep 4
+          if (-not (Get-NetTCPConnection -LocalPort 22 -State Listen -ErrorAction SilentlyContinue)) { Write-Error "demo server not listening on 22"; exit 1 }
+
+          New-Item -ItemType Directory -Force store | Out-Null
+          function Shot($name) {
+            $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+            $bmp = New-Object System.Drawing.Bitmap $wa.Width, $wa.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($wa.Location, [System.Drawing.Point]::Empty, $wa.Size)
+            $bmp.Save("store\$name.png", [System.Drawing.Imaging.ImageFormat]::Png)
+            $g.Dispose(); $bmp.Dispose()
+            Write-Host "shot $name $($wa.Width)x$($wa.Height)"
+          }
+          function RunApp($vars, $shots) {
+            Remove-Item -Recurse -Force "$env:APPDATA\com.hanson" -ErrorAction SilentlyContinue
+            foreach ($k in $vars.Keys) { Set-Item "env:$k" $vars[$k] }
+            $p = Start-Process "build\windows\x64\runner\Release\phoenicx_ssh.exe" -PassThru
+            for ($i = 0; $i -lt 40 -and $p.MainWindowHandle -eq 0; $i++) { Start-Sleep -Milliseconds 250; $p.Refresh() }
+            [Disp]::ShowWindow($p.MainWindowHandle, 3) | Out-Null
+            [Disp]::SetForegroundWindow($p.MainWindowHandle) | Out-Null
+            $t0 = Get-Date
+            foreach ($s in $shots) {
+              $wait = $s[1] - ((Get-Date) - $t0).TotalSeconds
+              if ($wait -gt 0) { Start-Sleep -Milliseconds ([int]($wait * 1000)) }
+              Shot $s[0]
+            }
+            Stop-Process -Id $p.Id -Force
+            foreach ($k in $vars.Keys) { Remove-Item "env:$k" -ErrorAction SilentlyContinue }
+            Start-Sleep 2
+          }
+          $base = @{ PHOENICX_SELFTEST = "ubuntu:demo@oracle-mumbai:22"; PHOENICX_STORE = "1" }
+          RunApp ($base + @{ PHOENICX_SELFTEST_COMMANDS = "16" }) @(@("w-terminal", 12), @("w-commands", 19))
+          RunApp ($base + @{ PHOENICX_SELFTEST_MONITOR = "4" }) @(@("w-monitor", 26))
+          RunApp ($base + @{ PHOENICX_SELFTEST_FILES = "6"; PHOENICX_SELFTEST_FILES_PATH = "/home/ubuntu/jellyfin"; PHOENICX_SELFTEST_UPLOAD_DIR = $web; PHOENICX_SELFTEST_DOWNLOAD = "backup-2026-11.tar.gz" }) @(@("w-files", 15))
+          RunApp ($base + @{ PHOENICX_SELFTEST_FILES = "6"; PHOENICX_SELFTEST_FILES_PATH = "/home/ubuntu/jellyfin"; PHOENICX_SELFTEST_EDIT = "docker-compose.yml" }) @(@("w-editor", 13))
+          Get-ChildItem store | ForEach-Object {
+            $jpg = [IO.Path]::ChangeExtension($_.FullName, ".jpg")
+            $img = [System.Drawing.Image]::FromFile($_.FullName)
+            $enc = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq "image/jpeg" }
+            $ps = New-Object System.Drawing.Imaging.EncoderParameters 1
+            $ps.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter ([System.Drawing.Imaging.Encoder]::Quality), 93L
+            $img.Save($jpg, $enc, $ps); $img.Dispose()
+            Write-Host ("@@STORE " + $_.BaseName + " " + [Convert]::ToBase64String([IO.File]::ReadAllBytes($jpg)))
+          }
+
   android:
     name: Android emulator test
     runs-on: ubuntu-latest

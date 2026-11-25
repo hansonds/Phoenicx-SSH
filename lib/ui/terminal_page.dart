@@ -21,8 +21,9 @@ class TerminalPage extends StatefulWidget {
   State<TerminalPage> createState() => _TerminalPageState();
 }
 
-/// Lets the automated tests open the Commands panel.
+/// Lets the automated tests open the Commands and Files panels.
 final commandsRequest = ValueNotifier<int>(0);
+final filesRequest = ValueNotifier<int>(0);
 
 class _TerminalPageState extends State<TerminalPage> {
   final _focus = FocusNode();
@@ -34,6 +35,11 @@ class _TerminalPageState extends State<TerminalPage> {
     super.initState();
     if (widget.active) _grabFocus();
     commandsRequest.addListener(_onCommandsRequest);
+    filesRequest.addListener(_onFilesRequest);
+  }
+
+  void _onFilesRequest() {
+    if (mounted && widget.active) _openFiles();
   }
 
   void _onCommandsRequest() {
@@ -63,6 +69,7 @@ class _TerminalPageState extends State<TerminalPage> {
   @override
   void dispose() {
     commandsRequest.removeListener(_onCommandsRequest);
+    filesRequest.removeListener(_onFilesRequest);
     _focus.dispose();
     super.dispose();
   }
