@@ -199,7 +199,14 @@ jobs:
       - name: Test the MSIX (install with a test certificate, start the app, uninstall)
         shell: pwsh
         run: |
-          dart run msix:create --version "$env:V.0" --output-path "$env:RUNNER_TEMP\msixtest" --output-name test --install-certificate true
+          # Throw-away test certificate, trusted only on this build machine.
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=PhoenicxTest" -CertStoreLocation Cert:\CurrentUser\My -KeyExportPolicy Exportable -NotAfter (Get-Date).AddDays(2)
+          $pw = ConvertTo-SecureString -String "test1234" -Force -AsPlainText
+          $pfx = "$env:RUNNER_TEMP\phx-test.pfx"
+          Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $pw | Out-Null
+          Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\LocalMachine\TrustedPeople -Password $pw | Out-Null
+          dart run msix:create --version "$env:V.0" --output-path "$env:RUNNER_TEMP\msixtest" --output-name test `
+            --certificate-path $pfx --certificate-password test1234 --publisher "CN=PhoenicxTest" --install-certificate false
           Add-AppxPackage -Path "$env:RUNNER_TEMP\msixtest\test.msix"
           $pkg = Get-AppxPackage -Name "HansonD.PhoenicxSSH"
           if (-not $pkg) { Write-Error "MSIX did not install"; exit 1 }
