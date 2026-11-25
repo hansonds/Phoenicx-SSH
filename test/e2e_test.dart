@@ -209,6 +209,23 @@ void main() {
       expect(await tool.run(c, 'install'), true, reason: tool.log.join('\n'));
     });
 
+    test('monitor expand button works while the side panel is already open', () async {
+      tab.setMonitorVisible(true);
+      var redraws = 0;
+      void l() => redraws++;
+      tab.addListener(l);
+      tab.setMonitorExpanded(true);
+      expect(tab.monitorExpanded, true);
+      expect(redraws, greaterThan(0), reason: 'screen must redraw when expanding an open monitor');
+      redraws = 0;
+      tab.setMonitorExpanded(false);
+      expect(tab.monitorExpanded, false);
+      expect(tab.monitorVisible, true);
+      expect(redraws, greaterThan(0));
+      tab.removeListener(l);
+      tab.setMonitorVisible(false);
+    });
+
     test('files: browse, upload, download, edit, rename, chmod, folder, delete', () async {
       final fs = tab.files;
       final dl = await Directory.systemTemp.createTemp('phx_dl');

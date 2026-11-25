@@ -401,9 +401,10 @@ class SshTab extends ChangeNotifier {
 
   void setMonitorExpanded(bool v) {
     monitorExpanded = v;
-    if (v) {
-      setMonitorVisible(true);
+    if (v && !monitorVisible) {
+      setMonitorVisible(true); // opens the monitor and redraws
     } else {
+      // Monitor already open (the usual case for the expand button): still redraw.
       notifyListeners();
     }
   }
