@@ -189,6 +189,32 @@ jobs:
           New-Item -ItemType Directory -Force out | Out-Null
           Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath out/PhoenicxSSH-Windows-Portable.zip
 
+      - name: Microsoft Store package (.msix)
+        shell: bash
+        run: |
+          # Unsigned on purpose: the Store signs it. Store versions must end in .0
+          dart run msix:create --store --version "$V.0" --output-path out --output-name PhoenicxSSH-Store
+          ls -la out
+
+      - name: Test the MSIX (install with a test certificate, start the app, uninstall)
+        shell: pwsh
+        run: |
+          dart run msix:create --version "$env:V.0" --output-path "$env:RUNNER_TEMP\msixtest" --output-name test --install-certificate true
+          Add-AppxPackage -Path "$env:RUNNER_TEMP\msixtest\test.msix"
+          $pkg = Get-AppxPackage -Name "HansonD.PhoenicxSSH"
+          if (-not $pkg) { Write-Error "MSIX did not install"; exit 1 }
+          $appId = (Get-AppxPackageManifest $pkg).Package.Applications.Application.Id
+          Write-Host "Installed $($pkg.PackageFullName) app id $appId"
+          Start-Process "shell:AppsFolder\$($pkg.PackageFamilyName)!$appId"
+          Start-Sleep 12
+          $p = Get-Process PhoenicxSSH -ErrorAction SilentlyContinue
+          if (-not $p) { Write-Error "App did not start from the MSIX"; exit 1 }
+          Write-Host "MSIX app running: pid $($p.Id), window '$($p.MainWindowTitle)'"
+          $p | Stop-Process -Force
+          Start-Sleep 2
+          Remove-AppxPackage $pkg.PackageFullName
+          Write-Host "MSIX install / start / uninstall OK"
+
       - name: Installer (Setup.exe)
         shell: pwsh
         run: |
@@ -221,6 +247,10 @@ jobs:
         with:
           name: PhoenicxSSH-${{ env.V }}-Windows-Portable.zip
           path: out/PhoenicxSSH-Windows-Portable.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PhoenicxSSH-${{ env.V }}-Store.msix
+          path: out/PhoenicxSSH-Store.msix
 
   release:
     name: Publish release (all files together)
@@ -245,7 +275,7 @@ jobs:
       - name: Check all files are here
         run: |
           ls -la dist
-          for f in PhoenicxSSH-Android-arm64.apk PhoenicxSSH-Android-universal.apk PhoenicxSSH-Windows-Setup.exe PhoenicxSSH-Windows-Portable.zip; do
+          for f in PhoenicxSSH-Android-arm64.apk PhoenicxSSH-Android-universal.apk PhoenicxSSH-Windows-Setup.exe PhoenicxSSH-Windows-Portable.zip PhoenicxSSH-Store.msix; do
             [ -f "dist/$f" ] || { echo "::error::$f is missing"; exit 1; }
           done
           ls dist/*.aab >/dev/null || { echo "::error::Play bundle is missing"; exit 1; }
@@ -264,6 +294,7 @@ jobs:
             | **PhoenicxSSH-Windows-Portable.zip** | Windows without installing – unzip and run `PhoenicxSSH.exe` |
             | **PhoenicxSSH-Android-arm64.apk** | Samsung and other modern Android phones (smaller) |
             | **PhoenicxSSH-Android-universal.apk** | Any Android device (bigger) |
+            | **PhoenicxSSH-Store.msix** | Microsoft Store (Partner Center) upload only – the Store signs it |
             | **PhoenicxSSH-Play.aab** | Google Play Console upload only (signed with the upload key) – not for installing on a phone |
 
             The Play Store version and these APKs are signed differently: uninstall one before installing the other (export your connections first).

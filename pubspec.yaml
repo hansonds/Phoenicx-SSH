@@ -1,7 +1,7 @@
 name: phoenicx_ssh
 description: Phoenicx SSH - a lightweight tabbed SSH client with live server monitoring.
 publish_to: 'none'
-version: 1.8.6+1
+version: 1.8.7+1
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -27,9 +27,21 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  msix: ^3.18.0
 
 flutter:
   uses-material-design: true
   assets:
     - assets/logo.png
     - assets/share.jpg
+
+# Microsoft Store package (built by GitHub Actions: dart run msix:create --store)
+msix_config:
+  display_name: Phoenicx SSH
+  publisher_display_name: Hanson D
+  identity_name: HansonD.PhoenicxSSH
+  publisher: CN=0A008030-E5DF-4ECF-AA74-B9D9217C239C
+  logo_path: assets/logo.png
+  capabilities: internetClient,internetClientServer,privateNetworkClientServer
+  languages: en-us
+  build_windows: false
