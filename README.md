@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://apps.microsoft.com/detail/9PDWZXPQH8GJ?mode=direct"><img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft" height="70"></a>
+  <a href="https://apps.microsoft.com/detail/9PDWZXPQH8GJ?mode=direct"><img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft" width="207"></a>
   &nbsp;
   <a href="https://play.google.com/store/apps/details?id=com.hanson.phoenicx_ssh"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="80"></a>
 </p>
@@ -29,7 +29,7 @@ These links always give you the newest version.
 
 | Device | Download | How to install |
 |---|---|---|
-| **Windows 10/11 (recommended)** | [<img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft" height="49">](https://apps.microsoft.com/detail/9PDWZXPQH8GJ?mode=direct) | Install from the Microsoft Store. Updates arrive automatically. |
+| **Windows 10/11 (recommended)** | [<img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft" width="130">](https://apps.microsoft.com/detail/9PDWZXPQH8GJ?mode=direct) | Install from the Microsoft Store. Updates arrive automatically. |
 | Windows, installer | [PhoenicxSSH-Windows-Setup.exe](https://github.com/hansonds/Phoenicx-SSH/releases/latest/download/PhoenicxSSH-Windows-Setup.exe) | Run it. It adds Phoenicx SSH to the Start menu (and the desktop if you tick the box). No admin rights needed. |
 | Windows, no install | [PhoenicxSSH-Windows-Portable.zip](https://github.com/hansonds/Phoenicx-SSH/releases/latest/download/PhoenicxSSH-Windows-Portable.zip) | Unzip it anywhere (even a USB stick) and run `PhoenicxSSH.exe`. |
 | **Android (recommended)** | [<img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="50">](https://play.google.com/store/apps/details?id=com.hanson.phoenicx_ssh) | Install from Google Play. Updates arrive automatically. |
