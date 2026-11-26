@@ -10,9 +10,9 @@
 </p>
 
 <p align="center">
-  <a href="https://apps.microsoft.com/detail/9PDWZXPQH8GJ?mode=direct"><img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft" width="207"></a>
+  <a href="https://apps.microsoft.com/detail/9PDWZXPQH8GJ?mode=direct"><img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft" width="207" align="middle"></a>
   &nbsp;
-  <a href="https://play.google.com/store/apps/details?id=com.hanson.phoenicx_ssh"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="80"></a>
+  <a href="https://play.google.com/store/apps/details?id=com.hanson.phoenicx_ssh"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="80" align="middle"></a>
 </p>
 
 <p align="center">
