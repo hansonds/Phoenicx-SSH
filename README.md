@@ -10,6 +10,8 @@
 </p>
 
 <p align="center">
+  <a href="https://apps.microsoft.com/detail/9PDWZXPQH8GJ?mode=direct"><img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft" height="56"></a>
+  &nbsp;
   <a href="https://play.google.com/store/apps/details?id=com.hanson.phoenicx_ssh"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="80"></a>
 </p>
 
@@ -27,7 +29,8 @@ These links always give you the newest version.
 
 | Device | Download | How to install |
 |---|---|---|
-| **Windows 10/11 (recommended)** | [PhoenicxSSH-Windows-Setup.exe](https://github.com/hansonds/Phoenicx-SSH/releases/latest/download/PhoenicxSSH-Windows-Setup.exe) | Run it. It adds Phoenicx SSH to the Start menu (and the desktop if you tick the box). No admin rights needed. |
+| **Windows 10/11 (recommended)** | [<img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft" height="40">](https://apps.microsoft.com/detail/9PDWZXPQH8GJ?mode=direct) | Install from the Microsoft Store. Updates arrive automatically. |
+| Windows, installer | [PhoenicxSSH-Windows-Setup.exe](https://github.com/hansonds/Phoenicx-SSH/releases/latest/download/PhoenicxSSH-Windows-Setup.exe) | Run it. It adds Phoenicx SSH to the Start menu (and the desktop if you tick the box). No admin rights needed. |
 | Windows, no install | [PhoenicxSSH-Windows-Portable.zip](https://github.com/hansonds/Phoenicx-SSH/releases/latest/download/PhoenicxSSH-Windows-Portable.zip) | Unzip it anywhere (even a USB stick) and run `PhoenicxSSH.exe`. |
 | **Android (recommended)** | [<img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="50">](https://play.google.com/store/apps/details?id=com.hanson.phoenicx_ssh) | Install from Google Play. Updates arrive automatically. |
 | Android phone, without Play | [PhoenicxSSH-Android-arm64.apk](https://github.com/hansonds/Phoenicx-SSH/releases/latest/download/PhoenicxSSH-Android-arm64.apk) | Open the file and allow "Install unknown apps" when asked. |
@@ -37,6 +40,8 @@ Older versions and release notes: [all releases](https://github.com/hansonds/Pho
 
 If Windows SmartScreen says "Windows protected your PC", click **More info → Run anyway**. The app isn't code-signed yet.
 
+> **Windows: Microsoft Store, installer or portable, pick one per PC.** They are separate installs. To move your servers between them: Servers → **Export** in one, **Import** in the other.
+>
 > **Google Play or APK, pick one per phone.** The two are signed differently, so Android won't install one over the other. To switch: Servers → **Export**, uninstall, install the other one, then **Import**.
 >
 > New APKs (from v1.8.6) install straight over the previous APK and keep your servers. If you have an APK older than v1.8.6, uninstall it once first (export your connections before).
@@ -101,4 +106,4 @@ Made by **Hanson** · [phoenicx.org](https://phoenicx.org)
 
 Built with Flutter, [dartssh2](https://pub.dev/packages/dartssh2) and [xterm.dart](https://github.com/TerminalStudio/xterm.dart).
 
-Google Play and the Google Play logo are trademarks of Google LLC.
+Google Play and the Google Play logo are trademarks of Google LLC. Microsoft and the Microsoft Store logo are trademarks of the Microsoft group of companies.
